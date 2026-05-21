@@ -45,13 +45,13 @@ export function AppShell({ children }: { children?: ReactNode }) {
   return (
     <div className="min-h-screen flex w-full">
       <aside className="w-60 shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col">
-        <div className="p-5 flex items-center gap-2">
+        <a href="https://www.astrolabs.uk" className="p-5 flex items-center gap-2 hover:opacity-80 transition-opacity">
           <SaturnLogo size={28} />
           <div className="leading-tight">
             <div className="text-sm font-semibold text-sidebar-foreground">AstroLabs</div>
             <div className="text-[11px] text-muted-foreground">& Co. CRM</div>
           </div>
-        </div>
+        </a>
         <nav className="px-3 flex-1 space-y-0.5">
           {items.map((it) => {
             const active = it.to === "/" ? pathname === "/" : pathname.startsWith(it.to);
