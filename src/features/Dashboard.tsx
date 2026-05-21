@@ -1,0 +1,144 @@
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { PageHeader } from "@/components/AppShell";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { gbp, fmtDate, PIPELINE_STAGES } from "@/lib/format";
+import { Users, FileText, Receipt, CheckSquare, Plus } from "lucide-react";
+
+function Kpi({ label, value, icon: Icon }: { label: string; value: string; icon: any }) {
+  return (
+    <Card className="p-5 card-surface">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">{label}</div>
+          <div className="kpi-value mt-2">{value}</div>
+        </div>
+        <div className="h-9 w-9 rounded-md brand-gradient flex items-center justify-center text-white">
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+export function Dashboard() {
+  const { user } = useAuth();
+
+  const invoices = useQuery({
+    queryKey: ["dash-invoices", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase.from("invoices").select("total, status").eq("owner_id", user!.id);
+      return data || [];
+    },
+  });
+  const clients = useQuery({
+    queryKey: ["dash-clients", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase.from("clients").select("id, stage").eq("owner_id", user!.id);
+      return data || [];
+    },
+  });
+  const tasks = useQuery({
+    queryKey: ["dash-tasks", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase.from("tasks").select("id, status").eq("owner_id", user!.id).neq("status", "Done");
+      return data || [];
+    },
+  });
+  const activity = useQuery({
+    queryKey: ["dash-activity", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("activity")
+        .select("*")
+        .eq("owner_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      return data || [];
+    },
+  });
+
+  const paid = (invoices.data || []).filter((i: any) => i.status === "Paid").reduce((s, i: any) => s + Number(i.total), 0);
+  const outstanding = (invoices.data || [])
+    .filter((i: any) => i.status === "Sent" || i.status === "Overdue")
+    .reduce((s, i: any) => s + Number(i.total), 0);
+
+  const stageCounts: Record<string, number> = {};
+  PIPELINE_STAGES.forEach((s) => (stageCounts[s] = 0));
+  (clients.data || []).forEach((c: any) => {
+    if (stageCounts[c.stage] !== undefined) stageCounts[c.stage]++;
+  });
+
+  return (
+    <div>
+      <PageHeader
+        title="Dashboard"
+        subtitle="Your studio at a glance"
+        actions={
+          <>
+            <Button asChild variant="outline" size="sm"><Link to="/clients"><Plus className="h-4 w-4 mr-1" />Client</Link></Button>
+            <Button asChild variant="outline" size="sm"><Link to="/billing"><Plus className="h-4 w-4 mr-1" />Invoice</Link></Button>
+            <Button asChild size="sm"><Link to="/proposals"><Plus className="h-4 w-4 mr-1" />Proposal</Link></Button>
+          </>
+        }
+      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Kpi label="Total revenue" value={gbp(paid)} icon={Receipt} />
+        <Kpi label="Outstanding" value={gbp(outstanding)} icon={Receipt} />
+        <Kpi label="Active clients" value={String((clients.data || []).length)} icon={Users} />
+        <Kpi label="Open tasks" value={String((tasks.data || []).length)} icon={CheckSquare} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
+        <Card className="card-surface p-5 lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold">Pipeline summary</h2>
+            <Link to="/pipeline" className="text-xs text-accent hover:underline">Open pipeline →</Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {PIPELINE_STAGES.map((s) => (
+              <div key={s} className="rounded-lg bg-muted/40 p-3">
+                <div className="text-[11px] text-muted-foreground">{s}</div>
+                <div className="text-xl font-semibold mt-1">{stageCounts[s]}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="card-surface p-5">
+          <h2 className="font-semibold mb-4">Recent activity</h2>
+          {(activity.data || []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">No activity yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {(activity.data || []).map((a: any) => (
+                <li key={a.id} className="text-sm">
+                  <div>{a.description}</div>
+                  <div className="text-[11px] text-muted-foreground">{fmtDate(a.created_at)} · {a.type}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      <Card className="card-surface p-5 mt-6 flex items-center justify-between">
+        <div>
+          <h3 className="font-semibold">Quick start</h3>
+          <p className="text-sm text-muted-foreground">Add your first client, then build a proposal in seconds.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button asChild variant="outline"><Link to="/settings">Settings</Link></Button>
+          <Button asChild><Link to="/clients">Add client</Link></Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
