@@ -58,7 +58,7 @@ function AuthPage() {
         <div className="flex items-center gap-2 mb-6">
           <SaturnLogo size={32} />
           <div>
-            <h1 className="text-lg font-semibold">AstroLabs CRM</h1>
+            <h1 className="text-lg font-semibold">AstroLabs & Co. CRM</h1>
             <p className="text-xs text-muted-foreground">
               {isSignup ? "Create your account" : "Sign in to continue"}
             </p>

@@ -52,7 +52,7 @@ async function sendHandoffEmail(opts: {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({
-      from: "AstroLabs CRM <onboarding@resend.dev>",
+      from: "AstroLabs & Co. CRM <onboarding@resend.dev>",
       to: ["hello@astrolabs.uk"],
       subject: `Human requested — ${opts.business || "chat"}`,
       html: `<h2>A visitor wants to talk to a human</h2>
