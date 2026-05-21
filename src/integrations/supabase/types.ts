@@ -14,7 +14,453 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activity: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          owner_id: string
+          ref_id: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          owner_id: string
+          ref_id?: string | null
+          type: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          owner_id?: string
+          ref_id?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          session_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          session_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_sessions: {
+        Row: {
+          business: string | null
+          created_at: string
+          id: string
+          owner_id: string | null
+          page_url: string | null
+          status: string
+          updated_at: string
+          visitor_email: string | null
+          visitor_name: string | null
+        }
+        Insert: {
+          business?: string | null
+          created_at?: string
+          id?: string
+          owner_id?: string | null
+          page_url?: string | null
+          status?: string
+          updated_at?: string
+          visitor_email?: string | null
+          visitor_name?: string | null
+        }
+        Update: {
+          business?: string | null
+          created_at?: string
+          id?: string
+          owner_id?: string | null
+          page_url?: string | null
+          status?: string
+          updated_at?: string
+          visitor_email?: string | null
+          visitor_name?: string | null
+        }
+        Relationships: []
+      }
+      clients: {
+        Row: {
+          business: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          owner_id: string
+          package: string | null
+          phone: string | null
+          service_type: string | null
+          stage: string
+          stage_changed_at: string
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          business?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          owner_id: string
+          package?: string | null
+          phone?: string | null
+          service_type?: string | null
+          stage?: string
+          stage_changed_at?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          business?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          owner_id?: string
+          package?: string | null
+          phone?: string | null
+          service_type?: string | null
+          stage?: string
+          stage_changed_at?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      invoices: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          due_date: string | null
+          id: string
+          issue_date: string
+          line_items: Json
+          notes: string | null
+          number: string
+          owner_id: string
+          paid_at: string | null
+          status: string
+          subtotal: number
+          total: number
+          updated_at: string
+          vat: boolean
+          vat_amount: number
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          issue_date?: string
+          line_items?: Json
+          notes?: string | null
+          number: string
+          owner_id: string
+          paid_at?: string | null
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          vat?: boolean
+          vat_amount?: number
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          issue_date?: string
+          line_items?: Json
+          notes?: string | null
+          number?: string
+          owner_id?: string
+          paid_at?: string | null
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          vat?: boolean
+          vat_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notes: {
+        Row: {
+          body: string
+          client_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          owner_id: string
+          subject: string | null
+        }
+        Insert: {
+          body: string
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          owner_id: string
+          subject?: string | null
+        }
+        Update: {
+          body?: string
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          owner_id?: string
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposals: {
+        Row: {
+          client_id: string | null
+          content: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          owner_id: string
+          package: string | null
+          services: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          owner_id: string
+          package?: string | null
+          services?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          owner_id?: string
+          package?: string | null
+          services?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quotes: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          id: string
+          issue_date: string
+          line_items: Json
+          notes: string | null
+          number: string | null
+          owner_id: string
+          status: string
+          subtotal: number
+          total: number
+          updated_at: string
+          vat: boolean
+          vat_amount: number
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          issue_date?: string
+          line_items?: Json
+          notes?: string | null
+          number?: string | null
+          owner_id: string
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          vat?: boolean
+          vat_amount?: number
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          issue_date?: string
+          line_items?: Json
+          notes?: string | null
+          number?: string | null
+          owner_id?: string
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          vat?: boolean
+          vat_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settings: {
+        Row: {
+          chatbot_system_prompt: string
+          company_email: string
+          company_name: string
+          company_website: string | null
+          created_at: string
+          id: string
+          invoice_prefix: string
+          next_invoice_number: number
+          notify_new_chat: boolean
+          owner_id: string
+          services: Json
+          updated_at: string
+          vat_enabled: boolean
+        }
+        Insert: {
+          chatbot_system_prompt?: string
+          company_email?: string
+          company_name?: string
+          company_website?: string | null
+          created_at?: string
+          id?: string
+          invoice_prefix?: string
+          next_invoice_number?: number
+          notify_new_chat?: boolean
+          owner_id: string
+          services?: Json
+          updated_at?: string
+          vat_enabled?: boolean
+        }
+        Update: {
+          chatbot_system_prompt?: string
+          company_email?: string
+          company_name?: string
+          company_website?: string | null
+          created_at?: string
+          id?: string
+          invoice_prefix?: string
+          next_invoice_number?: number
+          notify_new_chat?: boolean
+          owner_id?: string
+          services?: Json
+          updated_at?: string
+          vat_enabled?: boolean
+        }
+        Relationships: []
+      }
+      tasks: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          due_date: string | null
+          id: string
+          owner_id: string
+          priority: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          owner_id: string
+          priority?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          owner_id?: string
+          priority?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
