@@ -63,7 +63,7 @@ function TasksView() {
 
   const add = async () => {
     if (!title.trim()) return;
-    await create.mutateAsync({ title, client_id: clientId || null, priority, due_date: dueDate || null, status: "Todo" });
+    await create.mutateAsync({ title, client_id: clientId && clientId !== "none" ? clientId : null, priority, due_date: dueDate || null, status: "Todo" });
     setTitle(""); setDueDate("");
   };
 
@@ -73,7 +73,7 @@ function TasksView() {
     try {
       const r = await suggest({ data: { service: client?.service_type || undefined, pkg: client?.package || undefined, stage: client?.stage } });
       for (const t of r.tasks) {
-        await create.mutateAsync({ title: t, client_id: clientId || null, priority: "Medium", status: "Todo" });
+        await create.mutateAsync({ title: t, client_id: clientId && clientId !== "none" ? clientId : null, priority: "Medium", status: "Todo" });
       }
       toast.success(`Added ${r.tasks.length} tasks`);
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
