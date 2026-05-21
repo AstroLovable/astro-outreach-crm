@@ -11,7 +11,7 @@ import { useEffect } from "react";
 
 import appCss from "../styles.css?url";
 import { AuthProvider } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { getSupabasePublicEnv, supabase } from "@/lib/supabase-client";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -85,9 +85,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: React.ReactNode }) {
+  const supabaseEnv = getSupabasePublicEnv();
+
   return (
     <html lang="en">
-      <head><HeadContent /></head>
+      <head>
+        <HeadContent />
+        <meta name="lovable:supabase-url" content={supabaseEnv.url} />
+        <meta name="lovable:supabase-publishable-key" content={supabaseEnv.publishableKey} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__LOVABLE_SUPABASE__ = ${JSON.stringify(supabaseEnv)};`,
+          }}
+        />
+      </head>
       <body>
         {children}
         <Scripts />
