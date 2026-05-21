@@ -54,9 +54,9 @@ function ClientsView() {
   };
 
   const importCSV = (file: File) => {
-    Papa.parse(file, {
+    Papa.parse<any>(file, {
       header: true, skipEmptyLines: true,
-      complete: async (res) => {
+      complete: async (res: any) => {
         let n = 0;
         for (const row of res.data as any[]) {
           if (!row.name) continue;
@@ -127,7 +127,7 @@ function ClientsView() {
 
       <ClientFormDialog
         open={open} onOpenChange={setOpen} editing={editing}
-        onSave={async (vals) => {
+        onSave={async (vals: any) => {
           if (editing) await update.mutateAsync({ id: editing.id, patch: vals });
           else await create.mutateAsync(vals);
           setOpen(false);
