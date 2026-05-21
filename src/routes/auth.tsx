@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,13 +7,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SaturnLogo } from "@/components/SaturnLogo";
 import { toast } from "sonner";
+import { z } from "zod";
 
-export const Route = createFileRoute("/auth")({ component: AuthPage });
+const searchSchema = z.object({ signup: z.string().optional() });
+
+export const Route = createFileRoute("/auth")({
+  validateSearch: (s) => searchSchema.parse(s),
+  component: AuthPage,
+});
 
 function AuthPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const { signup } = useSearch({ from: "/auth" });
+  const isSignup = signup === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,7 +33,7 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      if (mode === "signup") {
+      if (isSignup) {
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -52,7 +59,9 @@ function AuthPage() {
           <SaturnLogo size={32} />
           <div>
             <h1 className="text-lg font-semibold">AstroLabs CRM</h1>
-            <p className="text-xs text-muted-foreground">Sign in to continue</p>
+            <p className="text-xs text-muted-foreground">
+              {isSignup ? "Create your account" : "Sign in to continue"}
+            </p>
           </div>
         </div>
         <form onSubmit={submit} className="space-y-4">
@@ -65,15 +74,9 @@ function AuthPage() {
             <Input id="password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
           <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? "..." : mode === "signin" ? "Sign in" : "Create account"}
+            {busy ? "..." : isSignup ? "Create account" : "Sign in"}
           </Button>
         </form>
-        <button
-          onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-          className="mt-4 text-sm text-accent hover:underline w-full text-center"
-        >
-          {mode === "signin" ? "No account? Sign up" : "Have an account? Sign in"}
-        </button>
         <div className="mt-6 text-center">
           <Link to="/" className="text-xs text-muted-foreground hover:underline">Back to home</Link>
         </div>
