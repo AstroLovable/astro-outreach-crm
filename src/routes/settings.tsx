@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Copy } from "lucide-react";
 
 function SettingsView() {
   const { data, update, isLoading } = useSettings();
@@ -18,22 +19,22 @@ function SettingsView() {
 
   if (isLoading || !form) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
+  const signupLink = typeof window !== "undefined" ? `${window.location.origin}/auth?signup=1` : "/auth?signup=1";
+
   const save = async () => {
     try {
       await update.mutateAsync({
-        company_name: form.company_name,
-        company_email: form.company_email,
-        company_website: form.company_website,
-        vat_enabled: form.vat_enabled,
-        invoice_prefix: form.invoice_prefix,
-        services: form.services,
-        chatbot_system_prompt: form.chatbot_system_prompt,
-        notify_new_chat: form.notify_new_chat,
+        company_name: form.company_name, company_email: form.company_email, company_website: form.company_website,
+        vat_enabled: form.vat_enabled, invoice_prefix: form.invoice_prefix, services: form.services,
+        chatbot_system_prompt: form.chatbot_system_prompt, notify_new_chat: form.notify_new_chat,
       });
       toast.success("Settings saved");
-    } catch (e: any) {
-      toast.error(e.message);
-    }
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(signupLink);
+    toast.success("Signup link copied");
   };
 
   return (
@@ -47,6 +48,15 @@ function SettingsView() {
           <div><Label>Invoice prefix</Label><Input value={form.invoice_prefix} onChange={(e) => setForm({ ...form, invoice_prefix: e.target.value })} /></div>
         </div>
         <div className="flex items-center gap-3"><Switch checked={form.vat_enabled} onCheckedChange={(v) => setForm({ ...form, vat_enabled: v })} /><Label>Apply 20% VAT by default</Label></div>
+      </Card>
+
+      <Card className="card-surface p-6 space-y-3">
+        <h2 className="font-semibold">Account access</h2>
+        <p className="text-sm text-muted-foreground">The public homepage no longer shows a signup button. Use this private link to create a new operator account.</p>
+        <div className="flex gap-2">
+          <Input readOnly value={signupLink} className="font-mono text-xs" />
+          <Button variant="outline" onClick={copy}><Copy className="h-4 w-4 mr-1" />Copy</Button>
+        </div>
       </Card>
 
       <Card className="card-surface p-6 space-y-4">
