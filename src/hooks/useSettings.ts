@@ -37,9 +37,9 @@ export function useSettings() {
           .select()
           .single();
         if (ce) throw ce;
-        return created as Settings;
+        return created as unknown as Settings;
       }
-      return data as Settings;
+      return data as unknown as Settings;
     },
   });
 
