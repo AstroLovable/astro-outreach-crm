@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { PIPELINE_STAGES, PACKAGES, fmtDate } from "@/lib/format";
 import { toast } from "sonner";
 import { Plus, Upload, Download, Trash2, Sparkles } from "lucide-react";
