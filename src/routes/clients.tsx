@@ -38,18 +38,45 @@ function ClientsView() {
     [c.name, c.business, c.email].filter(Boolean).join(" ").toLowerCase().includes(query.toLowerCase()),
   );
 
+  // Map our stages <-> the lead-list "status" column.
+  const stageToStatus = (s: string) =>
+    s === "Lead" ? "new" : s === "Quoted" ? "contacted" : s.toLowerCase();
+  const statusToStage = (s: string | undefined): string => {
+    const v = (s || "").trim().toLowerCase();
+    if (v === "new" || v === "lead" || v === "") return "Lead";
+    if (v === "contacted" || v === "quoted") return "Quoted";
+    const match = PIPELINE_STAGES.find((p) => p.toLowerCase() === v);
+    return match || "Lead";
+  };
+
   const exportCSV = () => {
+    // Match the lead-list format exactly: business_name, contact_name, email,
+    // phone, contact_method, status, notes, date_added, last_activity.
     const csv = Papa.unparse(
       clients.map((c) => ({
-        name: c.name, business: c.business, email: c.email, phone: c.phone,
-        website: c.website, service_type: c.service_type, package: c.package,
-        stage: c.stage, notes: c.notes,
+        business_name: c.business || c.name || "",
+        contact_name: c.business ? c.name : "",
+        email: c.email || "",
+        phone: c.phone || "",
+        contact_method: c.service_type || (c.email ? "email" : c.phone ? "phone" : ""),
+        status: stageToStatus(c.stage),
+        notes: c.notes || "",
+        date_added: c.created_at,
+        last_activity: c.updated_at,
       })),
+      {
+        columns: [
+          "business_name", "contact_name", "email", "phone",
+          "contact_method", "status", "notes", "date_added", "last_activity",
+        ],
+      },
     );
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "clients.csv"; a.click();
+    a.href = url;
+    a.download = `astrolabs-clients-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -59,12 +86,21 @@ function ClientsView() {
       complete: async (res: any) => {
         let n = 0;
         for (const row of res.data as any[]) {
-          if (!row.name) continue;
+          // Accept either the lead-list shape OR the legacy shape.
+          const business = row.business_name || row.business || null;
+          const contact = row.contact_name || row.name || null;
+          // Display name: prefer contact, fall back to business so the row isn't blank.
+          const name = (contact || business || "").toString().trim();
+          if (!name) continue;
           await create.mutateAsync({
-            name: row.name, business: row.business || null, email: row.email || null,
-            phone: row.phone || null, website: row.website || null,
-            service_type: row.service_type || null, package: row.package || null,
-            stage: PIPELINE_STAGES.includes(row.stage) ? row.stage : "Lead",
+            name,
+            business: business && business !== name ? business : row.business || null,
+            email: row.email || null,
+            phone: row.phone || null,
+            website: row.website || null,
+            service_type: row.contact_method || row.service_type || null,
+            package: row.package || null,
+            stage: statusToStage(row.status || row.stage),
             notes: row.notes || null,
           });
           n++;
@@ -73,6 +109,7 @@ function ClientsView() {
       },
     });
   };
+
 
   return (
     <>
