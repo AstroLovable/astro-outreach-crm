@@ -178,6 +178,9 @@ function ClientsView() {
 
 function ClientFormDialog({ open, onOpenChange, editing, onSave }: any) {
   const [f, setF] = useState<any>(editing || { name: "", stage: "Lead" });
+  useEffect(() => {
+    if (open) setF(editing || { name: "", stage: "Lead" });
+  }, [open, editing]);
   const reset = () => setF(editing || { name: "", stage: "Lead" });
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (v) reset(); }}>
