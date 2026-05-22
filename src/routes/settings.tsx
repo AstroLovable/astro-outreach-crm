@@ -111,9 +111,9 @@ function EmbedSnippet({ businessName }: { businessName: string }) {
       <Textarea readOnly rows={9} value={snippet} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
       <p className="text-xs text-muted-foreground">Customise <code>data-title</code> and <code>data-color</code> (hex) as needed.</p>
     </Card>
-    </div>
   );
 }
+
 
 export const Route = createFileRoute("/settings")({
   component: () => (
