@@ -9,7 +9,7 @@ import { SaturnLogo } from "@/components/SaturnLogo";
 import { toast } from "sonner";
 import { z } from "zod";
 
-const searchSchema = z.object({ signup: z.string().optional() });
+const searchSchema = z.object({ signup: z.coerce.string().optional().catch(undefined) });
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (s) => searchSchema.parse(s),
