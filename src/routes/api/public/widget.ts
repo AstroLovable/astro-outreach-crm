@@ -5,12 +5,13 @@ const JS = `(function(){
   var BASE = (s && s.dataset.base) || new URL(s.src).origin;
   var BUSINESS = (s && s.dataset.business) || "";
   var TITLE = (s && s.dataset.title) || "Chat with us";
-  var COLOR = (s && s.dataset.color) || "#6366f1";
+  var COLOR = (s && s.dataset.color) || "#4A6FA5";
+  var COLOR_DARK = (s && s.dataset.colorDark) || "#2E3A59";
   var sessionId = null, lastTs = "1970-01-01", polling = null;
 
-  var css = '.alc-btn{position:fixed;bottom:20px;right:20px;background:'+COLOR+';color:#fff;border:none;border-radius:999px;padding:14px 18px;font:600 14px system-ui;box-shadow:0 8px 24px rgba(0,0,0,.2);cursor:pointer;z-index:2147483646}'+
-  '.alc-wrap{position:fixed;bottom:80px;right:20px;width:340px;max-width:calc(100vw - 40px);height:480px;max-height:calc(100vh - 120px);background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.25);display:none;flex-direction:column;overflow:hidden;font:14px system-ui;z-index:2147483647}'+
-  '.alc-wrap.open{display:flex}.alc-hd{background:'+COLOR+';color:#fff;padding:12px 14px;font-weight:600;display:flex;justify-content:space-between;align-items:center}'+
+  var css = '.alc-btn{position:fixed;bottom:20px;right:20px;background:'+COLOR_DARK+';color:#fff;border:none;border-radius:999px;padding:14px 18px;font:600 14px system-ui;box-shadow:0 8px 24px rgba(46,58,89,.25);cursor:pointer;z-index:2147483646}'+
+  '.alc-wrap{position:fixed;bottom:80px;right:20px;width:340px;max-width:calc(100vw - 40px);height:480px;max-height:calc(100vh - 120px);background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(46,58,89,.25);display:none;flex-direction:column;overflow:hidden;font:14px system-ui;z-index:2147483647;border:1px solid #e5e7eb}'+
+  '.alc-wrap.open{display:flex}.alc-hd{background:'+COLOR_DARK+';color:#fff;padding:12px 14px;font-weight:600;display:flex;justify-content:space-between;align-items:center}'+
   '.alc-x{background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer}'+
   '.alc-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#f7f7f9}'+
   '.alc-m{padding:8px 12px;border-radius:12px;max-width:80%;white-space:pre-wrap;word-wrap:break-word;line-height:1.4}'+
