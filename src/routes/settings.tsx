@@ -78,6 +78,39 @@ function SettingsView() {
       </Card>
 
       <div className="flex justify-end"><Button onClick={save} disabled={update.isPending}>Save changes</Button></div>
+
+      <EmbedSnippet businessName={form.company_name} />
+    </div>
+  );
+}
+
+function EmbedSnippet({ businessName }: { businessName: string }) {
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://your-crm.lovable.app";
+  const snippet = `<!-- AstroLabs & Co. CRM chat widget -->
+<script
+  src="${origin}/api/public/widget"
+  data-base="${origin}"
+  data-business="${(businessName || "").replace(/"/g, "&quot;")}"
+  data-title="Chat with us"
+  data-color="#6366f1"
+  defer
+></script>`;
+  const copy = async () => {
+    await navigator.clipboard.writeText(snippet);
+    toast.success("Embed code copied");
+  };
+  return (
+    <Card className="card-surface p-6 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">Website chat embed</h2>
+          <p className="text-sm text-muted-foreground">Paste this snippet just before <code>&lt;/body&gt;</code> on any site to add the chat bubble. New conversations show up in Chats.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={copy}><Copy className="h-4 w-4 mr-1" />Copy</Button>
+      </div>
+      <Textarea readOnly rows={9} value={snippet} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+      <p className="text-xs text-muted-foreground">Customise <code>data-title</code> and <code>data-color</code> (hex) as needed.</p>
+    </Card>
     </div>
   );
 }
