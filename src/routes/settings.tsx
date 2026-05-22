@@ -92,7 +92,7 @@ function EmbedSnippet({ businessName }: { businessName: string }) {
   data-base="${origin}"
   data-business="${(businessName || "").replace(/"/g, "&quot;")}"
   data-title="Chat with us"
-  data-color="#6366f1"
+  data-color="#4A6FA5"
   defer
 ></script>`;
   const copy = async () => {
