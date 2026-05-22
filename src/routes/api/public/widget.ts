@@ -5,7 +5,8 @@ const JS = `(function(){
   var BASE = (s && s.dataset.base) || new URL(s.src).origin;
   var BUSINESS = (s && s.dataset.business) || "";
   var TITLE = (s && s.dataset.title) || "Chat with us";
-  var COLOR = (s && s.dataset.color) || "#6366f1";
+  var COLOR = (s && s.dataset.color) || "#4A6FA5";
+  var COLOR_DARK = (s && s.dataset.colorDark) || "#2E3A59";
   var sessionId = null, lastTs = "1970-01-01", polling = null;
 
   var css = '.alc-btn{position:fixed;bottom:20px;right:20px;background:'+COLOR+';color:#fff;border:none;border-radius:999px;padding:14px 18px;font:600 14px system-ui;box-shadow:0 8px 24px rgba(0,0,0,.2);cursor:pointer;z-index:2147483646}'+
