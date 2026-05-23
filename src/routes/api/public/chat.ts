@@ -1,4 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
+
+const bodySchema = z.object({
+  action: z.enum(["start", "send", "poll", "request_human"]),
+  sessionId: z.string().uuid().optional(),
+  business: z.string().max(200).optional(),
+  pageUrl: z.string().max(2000).optional(),
+  message: z.string().min(1).max(2000).optional(),
+  sinceId: z.string().max(64).optional(),
+});
 import { createClient } from "@supabase/supabase-js";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
