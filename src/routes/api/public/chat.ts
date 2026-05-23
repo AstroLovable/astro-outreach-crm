@@ -96,7 +96,11 @@ export const Route = createFileRoute("/api/public/chat")({
       return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: cors });
     }
 
-    const { action, sessionId, business, pageUrl, message, sinceId } = body ?? {};
+    const parsed = bodySchema.safeParse(body);
+    if (!parsed.success) {
+      return new Response(JSON.stringify({ error: "Invalid request" }), { status: 400, headers: cors });
+    }
+    const { action, sessionId, business, pageUrl, message, sinceId } = parsed.data;
     const db = getServiceClient();
 
     try {
