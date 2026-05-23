@@ -41,7 +41,12 @@ const JS = `(function(){
   function poll(){
     if(!sessionId) return;
     api('poll',{sinceId:lastTs}).then(function(r){
-      (r.messages||[]).forEach(function(m){ add(m.role==='user'?'user':'bot', m.content); lastTs = m.created_at; });
+      (r.messages||[]).forEach(function(m){
+        lastTs = m.created_at;
+        // Skip echoing the visitor's own messages back (we already rendered locally)
+        if(m.role === 'user') return;
+        add('bot', m.content);
+      });
     });
   }
   async function start(){
@@ -49,7 +54,7 @@ const JS = `(function(){
     var r = await api('start',{business:BUSINESS, pageUrl:location.href});
     sessionId = r.sessionId;
     add('bot', "Hi! How can we help?");
-    polling = setInterval(poll, 3000);
+    polling = setInterval(poll, 2000);
   }
   btn.onclick = function(){ wrap.classList.add('open'); start(); };
   wrap.querySelector('.alc-x').onclick = function(){ wrap.classList.remove('open'); };

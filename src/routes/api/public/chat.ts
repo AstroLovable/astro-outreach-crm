@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createServerFileRoute } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -61,18 +60,20 @@ async function sendNotificationEmail(opts: {
   });
 }
 
-export const ServerRoute = createServerFileRoute("/api/public/chat").methods({
-  OPTIONS: async () =>
-    new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-    }),
+export const Route = createFileRoute("/api/public/chat")({
+  server: {
+    handlers: {
+      OPTIONS: async () =>
+        new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+          },
+        }),
 
-  POST: async ({ request }) => {
+      POST: async ({ request }: { request: Request }) => {
     const cors = {
       "Access-Control-Allow-Origin": "*",
       "Content-Type": "application/json",
@@ -235,8 +236,9 @@ export const ServerRoute = createServerFileRoute("/api/public/chat").methods({
       console.error("[chat api]", err);
       return new Response(JSON.stringify({ error: err.message ?? "Internal error" }), { status: 500, headers: cors });
     }
+      },
+    },
   },
 });
 
-// Required by TanStack Start file-based routing
-export const Route = createFileRoute("/api/public/chat")({});
+
