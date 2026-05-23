@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createServerFileRoute } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
