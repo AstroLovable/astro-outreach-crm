@@ -60,18 +60,20 @@ async function sendNotificationEmail(opts: {
   });
 }
 
-export const ServerRoute = createServerFileRoute("/api/public/chat").methods({
-  OPTIONS: async () =>
-    new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-    }),
+export const Route = createFileRoute("/api/public/chat")({
+  server: {
+    handlers: {
+      OPTIONS: async () =>
+        new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+          },
+        }),
 
-  POST: async ({ request }) => {
+      POST: async ({ request }: { request: Request }) => {
     const cors = {
       "Access-Control-Allow-Origin": "*",
       "Content-Type": "application/json",
