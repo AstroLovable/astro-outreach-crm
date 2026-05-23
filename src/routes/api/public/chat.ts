@@ -1,4 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
+
+const bodySchema = z.object({
+  action: z.enum(["start", "send", "poll", "request_human"]),
+  sessionId: z.string().uuid().optional(),
+  business: z.string().max(200).optional(),
+  pageUrl: z.string().max(2000).optional(),
+  message: z.string().min(1).max(2000).optional(),
+  sinceId: z.string().max(64).optional(),
+});
 import { createClient } from "@supabase/supabase-js";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -86,7 +96,11 @@ export const Route = createFileRoute("/api/public/chat")({
       return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: cors });
     }
 
-    const { action, sessionId, business, pageUrl, message, sinceId } = body ?? {};
+    const parsed = bodySchema.safeParse(body);
+    if (!parsed.success) {
+      return new Response(JSON.stringify({ error: "Invalid request" }), { status: 400, headers: cors });
+    }
+    const { action, sessionId, business, pageUrl, message, sinceId } = parsed.data;
     const db = getServiceClient();
 
     try {
@@ -234,7 +248,7 @@ export const Route = createFileRoute("/api/public/chat")({
       return new Response(JSON.stringify({ error: "Unknown action" }), { status: 400, headers: cors });
     } catch (err: any) {
       console.error("[chat api]", err);
-      return new Response(JSON.stringify({ error: err.message ?? "Internal error" }), { status: 500, headers: cors });
+      return new Response(JSON.stringify({ error: "Internal error" }), { status: 500, headers: cors });
     }
       },
     },
