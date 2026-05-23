@@ -235,9 +235,8 @@ export const Route = createFileRoute("/api/public/chat")({
     } catch (err: any) {
       console.error("[chat api]", err);
       return new Response(JSON.stringify({ error: err.message ?? "Internal error" }), { status: 500, headers: cors });
-    }
+    },
+  },
   },
 });
 
-// Required by TanStack Start file-based routing
-export const Route = createFileRoute("/api/public/chat")({});
