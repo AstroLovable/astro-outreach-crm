@@ -248,7 +248,7 @@ export const Route = createFileRoute("/api/public/chat")({
       return new Response(JSON.stringify({ error: "Unknown action" }), { status: 400, headers: cors });
     } catch (err: any) {
       console.error("[chat api]", err);
-      return new Response(JSON.stringify({ error: err.message ?? "Internal error" }), { status: 500, headers: cors });
+      return new Response(JSON.stringify({ error: "Internal error" }), { status: 500, headers: cors });
     }
       },
     },
