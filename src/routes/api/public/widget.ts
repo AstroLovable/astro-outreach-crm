@@ -37,9 +37,13 @@ const JS = `(function(){
 
   var msgs = wrap.querySelector('.alc-msgs');
   var transcript = [];
+  var lastSeenAt = new Date(0).toISOString();
+  var pollTimer = null;
+  var sessionStatus = 'ai_handling';
+
   function add(role, content){
     var d = document.createElement('div'); d.className='alc-m '+(role==='user'?'user':'bot'); d.textContent = content; msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
-    transcript.push((role==='user'?'VISITOR':'BOT')+': '+content);
+    transcript.push((role==='user'?'VISITOR':role==='human'?'AGENT':'BOT')+': '+content);
   }
   function callFn(name, payload){
     return fetch(SUPA+'/functions/v1/'+name,{
@@ -49,9 +53,29 @@ const JS = `(function(){
     }).then(function(r){return r.json()});
   }
 
+  function poll(){
+    if(!sessionId) return;
+    callFn('chat', { action:'poll', sessionId: sessionId, since: lastSeenAt })
+      .then(function(r){
+        if(r && Array.isArray(r.messages)){
+          r.messages.forEach(function(m){
+            // Skip messages we already echoed locally (assistant replies returned synchronously)
+            if(m.created_at > lastSeenAt){
+              lastSeenAt = m.created_at;
+              if(m.role === 'human'){
+                add('human', m.content);
+              }
+            }
+          });
+        }
+        if(r && r.status) sessionStatus = r.status;
+      }).catch(function(){});
+  }
+
   btn.onclick = function(){
     wrap.classList.add('open');
     if(!sessionId && transcript.length===0){ add('bot', 'Hi! How can we help?'); }
+    if(!pollTimer) pollTimer = setInterval(poll, 3000);
   };
   wrap.querySelector('.alc-x').onclick = function(){ wrap.classList.remove('open'); };
   wrap.querySelector('.alc-in').onsubmit = function(e){
@@ -63,9 +87,14 @@ const JS = `(function(){
     inp.value='';
     callFn('chat', { sessionId: sessionId, pageUrl: location.href, message: v })
       .then(function(r){
-        if(r.sessionId) sessionId = r.sessionId;
-        if(r.reply) add('bot', r.reply);
-        else if(r.error) add('bot', '⚠ '+r.error);
+        if(r.sessionId) {
+          sessionId = r.sessionId;
+          if(!pollTimer) pollTimer = setInterval(poll, 3000);
+        }
+        if(r.reply) {
+          add('bot', r.reply);
+          lastSeenAt = new Date().toISOString();
+        } else if(r.error) add('bot', '⚠ '+r.error);
       })
       .catch(function(err){ add('bot', '⚠ Network error'); console.error(err); });
   };
