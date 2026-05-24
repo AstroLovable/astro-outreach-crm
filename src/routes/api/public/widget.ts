@@ -1,13 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+const SUPA_URL = "https://rjvlscwkwzjuksnwwujo.supabase.co";
+const SUPA_ANON =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqdmxzY3drd3pqdWtzbnd3dWpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjAzMzEsImV4cCI6MjA5NDkzNjMzMX0.HFnEkzwacpDVSDUhchJSDZzs96UWZNNNPonSu89HrFE";
+
 const JS = `(function(){
   var s = document.currentScript;
-  var BASE = (s && s.dataset.base) || new URL(s.src).origin;
-  var BUSINESS = (s && s.dataset.business) || "";
   var TITLE = (s && s.dataset.title) || "Chat with us";
   var COLOR = (s && s.dataset.color) || "#4A6FA5";
   var COLOR_DARK = (s && s.dataset.colorDark) || "#2E3A59";
-  var sessionId = null, lastTs = "1970-01-01", polling = null;
+  var SUPA = ${JSON.stringify(SUPA_URL)};
+  var KEY = ${JSON.stringify(SUPA_ANON)};
+  var sessionId = null;
 
   var css = '.alc-btn{position:fixed;bottom:20px;right:20px;background:'+COLOR_DARK+';color:#fff;border:none;border-radius:999px;padding:14px 18px;font:600 14px system-ui;box-shadow:0 8px 24px rgba(46,58,89,.25);cursor:pointer;z-index:2147483646}'+
   '.alc-wrap{position:fixed;bottom:80px;right:20px;width:340px;max-width:calc(100vw - 40px);height:480px;max-height:calc(100vh - 120px);background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(46,58,89,.25);display:none;flex-direction:column;overflow:hidden;font:14px system-ui;z-index:2147483647;border:1px solid #e5e7eb}'+
@@ -32,38 +36,43 @@ const JS = `(function(){
   document.body.appendChild(btn); document.body.appendChild(wrap);
 
   var msgs = wrap.querySelector('.alc-msgs');
+  var transcript = [];
   function add(role, content){
     var d = document.createElement('div'); d.className='alc-m '+(role==='user'?'user':'bot'); d.textContent = content; msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+    transcript.push((role==='user'?'VISITOR':'BOT')+': '+content);
   }
-  function api(action, extra){
-    return fetch(BASE+'/api/public/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({action:action,sessionId:sessionId},extra||{}))}).then(function(r){return r.json()});
+  function callFn(name, payload){
+    return fetch(SUPA+'/functions/v1/'+name,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+KEY,'apikey':KEY},
+      body:JSON.stringify(payload||{})
+    }).then(function(r){return r.json()});
   }
-  function poll(){
-    if(!sessionId) return;
-    api('poll',{sinceId:lastTs}).then(function(r){
-      (r.messages||[]).forEach(function(m){
-        lastTs = m.created_at;
-        // Skip echoing the visitor's own messages back (we already rendered locally)
-        if(m.role === 'user') return;
-        add('bot', m.content);
-      });
-    });
-  }
-  async function start(){
-    if(sessionId) return;
-    var r = await api('start',{business:BUSINESS, pageUrl:location.href});
-    sessionId = r.sessionId;
-    add('bot', "Hi! How can we help?");
-    polling = setInterval(poll, 2000);
-  }
-  btn.onclick = function(){ wrap.classList.add('open'); start(); };
+
+  btn.onclick = function(){
+    wrap.classList.add('open');
+    if(!sessionId && transcript.length===0){ add('bot', 'Hi! How can we help?'); }
+  };
   wrap.querySelector('.alc-x').onclick = function(){ wrap.classList.remove('open'); };
   wrap.querySelector('.alc-in').onsubmit = function(e){
-    e.preventDefault(); var inp = wrap.querySelector('input'); var v = inp.value.trim(); if(!v) return;
-    add('user', v); inp.value=''; api('send',{message:v}).then(function(){ setTimeout(poll, 800); });
+    e.preventDefault();
+    var inp = wrap.querySelector('input');
+    var v = inp.value.trim();
+    if(!v) return;
+    add('user', v);
+    inp.value='';
+    callFn('chat', { sessionId: sessionId, pageUrl: location.href, message: v })
+      .then(function(r){
+        if(r.sessionId) sessionId = r.sessionId;
+        if(r.reply) add('bot', r.reply);
+        else if(r.error) add('bot', '⚠ '+r.error);
+      })
+      .catch(function(err){ add('bot', '⚠ Network error'); console.error(err); });
   };
   wrap.querySelector('.alc-human').onclick = function(){
-    api('request_human').then(function(){ add('bot', "Connecting you to a human…"); });
+    if(!sessionId){ add('bot', 'Send a message first so we can pick up the conversation.'); return; }
+    callFn('handoff', { sessionId: sessionId, pageUrl: location.href, transcript: transcript.join('\\n') })
+      .then(function(){ add('bot', "Connecting you to a human… we'll be in touch shortly."); });
   };
 })();`;
 
