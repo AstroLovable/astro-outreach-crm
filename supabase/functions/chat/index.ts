@@ -42,6 +42,31 @@ Deno.serve(async (req) => {
       body.systemPrompt ||
       "You are a helpful customer support assistant. Answer briefly. If you cannot help, offer to connect the user to a human.";
 
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const db = createClient(url, serviceKey);
+
+    // Poll mode — widget fetches new agent/AI messages since a timestamp
+    if (body.action === "poll" && body.sessionId) {
+      const since = typeof body.since === "string" ? body.since : "1970-01-01T00:00:00Z";
+      const { data: messages } = await db
+        .from("chat_messages")
+        .select("id, role, content, created_at")
+        .eq("session_id", body.sessionId)
+        .in("role", ["assistant", "human"])
+        .gt("created_at", since)
+        .order("created_at", { ascending: true });
+      const { data: sess } = await db
+        .from("chat_sessions")
+        .select("status")
+        .eq("id", body.sessionId)
+        .maybeSingle();
+      return new Response(
+        JSON.stringify({ messages: messages ?? [], status: sess?.status ?? null }),
+        { headers: CORS },
+      );
+    }
+
     // Raw passthrough mode
     if (Array.isArray(body.messages) && !body.message) {
       const reply = await callGroq(systemPrompt, body.messages);
