@@ -74,10 +74,6 @@ Deno.serve(async (req) => {
     }
 
     // Widget mode — persist + reply
-    const url = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const db = createClient(url, serviceKey);
-
     let sessionId: string | null = body.sessionId ?? null;
     if (!sessionId) {
       const { data, error } = await db
