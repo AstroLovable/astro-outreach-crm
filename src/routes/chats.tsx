@@ -99,7 +99,7 @@ function ChatsView() {
         {(sessions.data || []).length === 0 ? (
           <p className="p-4 text-sm text-muted-foreground">No chats yet.</p>
         ) : (
-          (sessions.data || []).map((s: { id: string; visitor_name?: string; visitor_email?: string; status: string; page_url?: string; updated_at: string }) => (
+          (sessions.data || []).map((s: { id: string; visitor_name: string | null; visitor_email: string | null; status: string; page_url: string | null; updated_at: string }) => (
             <button
               key={s.id}
               onClick={() => setSelected(s.id)}
