@@ -132,6 +132,8 @@ export function Dashboard() {
         </Card>
       </div>
 
+      <LiveChatsCard />
+
       <Card className="card-surface p-5 mt-6 flex items-center justify-between">
         <div>
           <h3 className="font-semibold">Quick start</h3>
@@ -143,5 +145,99 @@ export function Dashboard() {
         </div>
       </Card>
     </div>
+  );
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  ai_handling: "AI",
+  awaiting_human: "Needs Human",
+  human_active: "Human",
+  closed: "Closed",
+};
+
+function LiveChatsCard() {
+  const qc = useQueryClient();
+  const sessions = useQuery({
+    queryKey: ["dash-chat-sessions"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("chat_sessions")
+        .select("id, visitor_name, visitor_email, status, page_url, updated_at")
+        .neq("status", "closed")
+        .order("updated_at", { ascending: false })
+        .limit(6);
+      return data || [];
+    },
+  });
+
+  useEffect(() => {
+    const ch = supabase
+      .channel("dash_chat_sessions")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "chat_sessions" },
+        () => qc.invalidateQueries({ queryKey: ["dash-chat-sessions"] }),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [qc]);
+
+  const toggle = async (
+    s: { id: string; status: string },
+    nextOn: boolean,
+  ) => {
+    try {
+      const nextStatus = nextOn ? "ai_handling" : "human_active";
+      await supabase
+        .from("chat_sessions")
+        .update({ status: nextStatus, updated_at: new Date().toISOString() })
+        .eq("id", s.id);
+      await supabase.from("chat_messages").insert({
+        session_id: s.id,
+        role: nextOn ? "assistant" : "human",
+        content: nextOn
+          ? "You're now chatting with the AstroLabs AI service bot, how can I help?"
+          : "You're now chatting with the AstroLabs team — we'll take it from here!",
+      });
+      toast.success(nextOn ? "AI re-enabled" : "Taken over by you");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    }
+  };
+
+  const rows = sessions.data || [];
+
+  return (
+    <Card className="card-surface p-5 mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          <h2 className="font-semibold">Live chats</h2>
+        </div>
+        <Link to="/chats" className="text-xs text-accent hover:underline">Open chats →</Link>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No active chats.</p>
+      ) : (
+        <ul className="divide-y">
+          {rows.map((s) => (
+            <li key={s.id} className="py-2.5 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium truncate">
+                  {s.visitor_name || s.visitor_email || "Anonymous"}
+                  <span className="ml-2 text-[10px] text-muted-foreground">{STATUS_LABEL[s.status] || s.status}</span>
+                </div>
+                <div className="text-[11px] text-muted-foreground truncate">{s.page_url || "—"} · {fmtDate(s.updated_at)}</div>
+              </div>
+              <AiActiveToggle
+                on={s.status === "ai_handling"}
+                onChange={(next) => toggle(s, next)}
+                size="sm"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
