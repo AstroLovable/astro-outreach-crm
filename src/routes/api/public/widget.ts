@@ -59,11 +59,10 @@ const JS = `(function(){
       .then(function(r){
         if(r && Array.isArray(r.messages)){
           r.messages.forEach(function(m){
-            // Skip messages we already echoed locally (assistant replies returned synchronously)
             if(m.created_at > lastSeenAt){
               lastSeenAt = m.created_at;
-              if(m.role === 'human'){
-                add('human', m.content);
+              if(m.role === 'human' || m.role === 'assistant'){
+                add(m.role, m.content);
               }
             }
           });
