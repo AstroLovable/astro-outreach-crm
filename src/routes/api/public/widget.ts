@@ -38,6 +38,7 @@ const JS = `(function(){
   var msgs = wrap.querySelector('.alc-msgs');
   var transcript = [];
   var lastSeenAt = new Date(0).toISOString();
+  var seenIds = {};
   var pollTimer = null;
   var sessionStatus = 'ai_handling';
 
