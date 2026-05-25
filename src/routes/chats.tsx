@@ -3,13 +3,14 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase-client";
 import { useAuth } from "@/hooks/useAuth";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/format";
-import { Send, Sparkles, UserCheck, RotateCcw, X } from "lucide-react";
+import { Send, Sparkles, X, UserPlus } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { draftReply } from "@/lib/ai.functions";
 
@@ -36,6 +37,11 @@ function statusBadgeClass(status: string) {
   return "bg-accent/20 text-accent-foreground";
 }
 
+const AI_RESUME_MSG =
+  "You're now chatting with the AstroLabs AI service bot, how can I help?";
+const HUMAN_TAKEOVER_MSG =
+  "You're now chatting with the AstroLabs team — we'll take it from here!";
+
 function ChatsView() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -53,18 +59,39 @@ function ChatsView() {
     },
   });
 
-  // Realtime — refresh sessions list on any change
   useEffect(() => {
     const ch = supabase
       .channel("chat_sessions_realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_sessions" }, () => {
-        qc.invalidateQueries({ queryKey: ["chat_sessions"] });
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "chat_sessions" },
+        () => qc.invalidateQueries({ queryKey: ["chat_sessions"] }),
+      )
       .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
+    return () => { supabase.removeChannel(ch); };
   }, [qc]);
+
+  // Notify when a new client is auto-created from chat
+  useEffect(() => {
+    if (!user) return;
+    const ch = supabase
+      .channel("clients_new_from_chat")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "clients", filter: `owner_id=eq.${user.id}` },
+        (payload: { new: { name?: string; notes?: string | null } }) => {
+          const row = payload.new;
+          if (row?.notes && row.notes.startsWith("Auto-created from chat")) {
+            toast.success(`New lead from chat: ${row.name}`, {
+              icon: <UserPlus className="h-4 w-4" />,
+            });
+            qc.invalidateQueries({ queryKey: ["clients"] });
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user, qc]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] gap-4">
@@ -72,7 +99,7 @@ function ChatsView() {
         {(sessions.data || []).length === 0 ? (
           <p className="p-4 text-sm text-muted-foreground">No chats yet.</p>
         ) : (
-          (sessions.data || []).map((s: any) => (
+          (sessions.data || []).map((s: { id: string; visitor_name?: string; visitor_email?: string; status: string; page_url?: string; updated_at: string }) => (
             <button
               key={s.id}
               onClick={() => setSelected(s.id)}
@@ -136,7 +163,6 @@ function ChatPanel({ sessionId }: { sessionId: string }) {
     },
   });
 
-  // Realtime subscriptions for this session
   useEffect(() => {
     const ch = supabase
       .channel(`chat_${sessionId}`)
@@ -151,53 +177,56 @@ function ChatPanel({ sessionId }: { sessionId: string }) {
         () => qc.invalidateQueries({ queryKey: ["chat_session", sessionId] }),
       )
       .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
+    return () => { supabase.removeChannel(ch); };
   }, [sessionId, qc]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs.data]);
 
-  const setStatus = useMutation({
-    mutationFn: async (status: string) => {
-      const { error } = await supabase
-        .from("chat_sessions")
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq("id", sessionId);
-      if (error) throw error;
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
+  const status = session.data?.status as string | undefined;
+  const aiActive = status === "ai_handling";
 
-  const takeover = async () => {
-    // Trigger the handoff edge function (emails + marks awaiting_human),
-    // then immediately set to human_active since the owner is taking over now.
+  const setStatus = async (next: string) => {
+    const { error } = await supabase
+      .from("chat_sessions")
+      .update({ status: next, updated_at: new Date().toISOString() })
+      .eq("id", sessionId);
+    if (error) throw error;
+  };
+
+  const insertMessage = async (role: "human" | "assistant", content: string) => {
+    await supabase.from("chat_messages").insert({ session_id: sessionId, role, content });
+  };
+
+  const toggleAi = async (nextOn: boolean) => {
     try {
-      const { error: fnErr } = await supabase.functions.invoke("handoff", {
-        body: { sessionId, pageUrl: session.data?.page_url },
-      });
-      if (fnErr) console.error(fnErr);
-      await setStatus.mutateAsync("human_active");
-      toast.success("You've taken over this chat");
-    } catch (e: any) {
-      toast.error(e.message);
+      if (nextOn) {
+        await setStatus("ai_handling");
+        await insertMessage("assistant", AI_RESUME_MSG);
+        toast.success("AI re-enabled for this session");
+      } else {
+        await setStatus("human_active");
+        await insertMessage("human", HUMAN_TAKEOVER_MSG);
+        toast.success("You've taken over this chat");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
     }
   };
 
-  const handBack = async () => {
-    await setStatus.mutateAsync("ai_handling");
-    toast.success("Handed back to AI");
-  };
-
-  const close = async () => {
-    await setStatus.mutateAsync("closed");
-    toast.success("Chat closed");
-  };
+  const close = useMutation({
+    mutationFn: () => setStatus("closed"),
+    onSuccess: () => toast.success("Chat closed"),
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const send = async () => {
     if (!reply.trim()) return;
+    // Auto-disable AI when CRM agent sends a message
+    if (status === "ai_handling" || status === "awaiting_human") {
+      try { await setStatus("human_active"); } catch { /* ignore */ }
+    }
     const { error } = await supabase
       .from("chat_messages")
       .insert({ session_id: sessionId, role: "human", content: reply });
@@ -212,7 +241,7 @@ function ChatPanel({ sessionId }: { sessionId: string }) {
   const aiDraft = async () => {
     const ctx = (msgs.data || [])
       .slice(-6)
-      .map((m: any) => `${m.role}: ${m.content}`)
+      .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
       .join("\n");
     setBusy(true);
     try {
@@ -223,14 +252,12 @@ function ChatPanel({ sessionId }: { sessionId: string }) {
         },
       });
       setReply(r.reply);
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
     } finally {
       setBusy(false);
     }
   };
-
-  const status = session.data?.status;
 
   return (
     <Card className="card-surface flex flex-col h-[70vh]">
@@ -238,9 +265,7 @@ function ChatPanel({ sessionId }: { sessionId: string }) {
         <div className="min-w-0">
           <div className="font-medium truncate">
             {session.data?.visitor_name || session.data?.visitor_email || "Anonymous"}
-            <span
-              className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${statusBadgeClass(status || "")}`}
-            >
+            <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${statusBadgeClass(status || "")}`}>
               {STATUS_LABEL[status || ""] || status}
             </span>
           </div>
@@ -248,21 +273,10 @@ function ChatPanel({ sessionId }: { sessionId: string }) {
             {session.data?.page_url || "—"}
           </div>
         </div>
-        <div className="flex gap-2">
-          {(status === "ai_handling" || status === "awaiting_human") && (
-            <Button size="sm" variant="outline" onClick={takeover}>
-              <UserCheck className="h-4 w-4 mr-1" />
-              Take Over
-            </Button>
-          )}
-          {status === "human_active" && (
-            <Button size="sm" variant="outline" onClick={handBack}>
-              <RotateCcw className="h-4 w-4 mr-1" />
-              Hand back to AI
-            </Button>
-          )}
+        <div className="flex items-center gap-3">
+          <AiActiveToggle on={aiActive} disabled={status === "closed"} onChange={toggleAi} />
           {status !== "closed" && (
-            <Button size="sm" variant="ghost" onClick={close}>
+            <Button size="sm" variant="ghost" onClick={() => close.mutate()}>
               <X className="h-4 w-4 mr-1" />
               Close
             </Button>
@@ -270,11 +284,8 @@ function ChatPanel({ sessionId }: { sessionId: string }) {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {(msgs.data || []).map((m: any) => (
-          <div
-            key={m.id}
-            className={`flex ${m.role === "visitor" ? "justify-start" : "justify-end"}`}
-          >
+        {(msgs.data || []).map((m: { id: string; role: string; content: string; created_at: string }) => (
+          <div key={m.id} className={`flex ${m.role === "visitor" ? "justify-start" : "justify-end"}`}>
             <div
               className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
                 m.role === "visitor" ? "bg-muted" : "bg-accent text-accent-foreground"
@@ -312,5 +323,31 @@ function ChatPanel({ sessionId }: { sessionId: string }) {
         </div>
       </div>
     </Card>
+  );
+}
+
+export function AiActiveToggle({
+  on,
+  disabled,
+  onChange,
+  size = "md",
+}: {
+  on: boolean;
+  disabled?: boolean;
+  onChange: (next: boolean) => void;
+  size?: "sm" | "md";
+}) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer select-none">
+      <span className={`text-xs font-medium ${on ? "text-green-600" : "text-destructive"}`}>
+        AI {on ? "Active" : "Off"}
+      </span>
+      <Switch
+        checked={on}
+        disabled={disabled}
+        onCheckedChange={onChange}
+        className={`${on ? "data-[state=checked]:bg-green-500" : "data-[state=unchecked]:bg-destructive"} ${size === "sm" ? "scale-90" : ""}`}
+      />
+    </label>
   );
 }
