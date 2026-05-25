@@ -38,6 +38,7 @@ const JS = `(function(){
   var msgs = wrap.querySelector('.alc-msgs');
   var transcript = [];
   var lastSeenAt = new Date(0).toISOString();
+  var seenIds = {};
   var pollTimer = null;
   var sessionStatus = 'ai_handling';
 
@@ -59,12 +60,11 @@ const JS = `(function(){
       .then(function(r){
         if(r && Array.isArray(r.messages)){
           r.messages.forEach(function(m){
-            // Skip messages we already echoed locally (assistant replies returned synchronously)
-            if(m.created_at > lastSeenAt){
-              lastSeenAt = m.created_at;
-              if(m.role === 'human'){
-                add('human', m.content);
-              }
+            if(m.created_at > lastSeenAt) lastSeenAt = m.created_at;
+            if(seenIds[m.id]) return;
+            seenIds[m.id] = 1;
+            if(m.role === 'human' || m.role === 'assistant'){
+              add(m.role, m.content);
             }
           });
         }
@@ -91,9 +91,9 @@ const JS = `(function(){
           sessionId = r.sessionId;
           if(!pollTimer) pollTimer = setInterval(poll, 3000);
         }
+        if(r.replyId) seenIds[r.replyId] = 1;
         if(r.reply) {
           add('bot', r.reply);
-          lastSeenAt = new Date().toISOString();
         } else if(r.error) add('bot', '⚠ '+r.error);
       })
       .catch(function(err){ add('bot', '⚠ Network error'); console.error(err); });
