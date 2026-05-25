@@ -236,6 +236,7 @@ Deno.serve(async (req) => {
 
     let reply = "";
     let handover = false;
+    let replyId: string | null = null;
     if (session?.status === "ai_handling") {
       const { data: history } = await db
         .from("chat_messages")
@@ -265,14 +266,14 @@ Deno.serve(async (req) => {
         role: "assistant",
         content: reply,
       }).select("id").single();
-      var replyId = inserted?.id ?? null;
+      replyId = inserted?.id ?? null;
 
       if (handover) {
         await triggerHandover(url, serviceKey, sessionId!, body.pageUrl ?? null);
       }
     }
 
-    // Fire-and-forget client extraction (non-blocking-ish)
+    // Fire-and-forget client extraction
     if (typeof body.message === "string" && body.message.trim()) {
       const { data: history2 } = await db
         .from("chat_messages")
@@ -283,7 +284,6 @@ Deno.serve(async (req) => {
       const transcript = (history2 ?? [])
         .map((m: { role: string; content: string }) => `${m.role.toUpperCase()}: ${m.content}`)
         .join("\n");
-      // Don't await — keep response snappy; errors are logged inside.
       extractClientData(db, sessionId!, transcript).catch((e) => console.error(e));
     }
 
@@ -292,7 +292,10 @@ Deno.serve(async (req) => {
       .update({ updated_at: new Date().toISOString() })
       .eq("id", sessionId!);
 
-    return new Response(JSON.stringify({ sessionId, reply, handover }), { headers: CORS });
+    return new Response(
+      JSON.stringify({ sessionId, reply, replyId, handover }),
+      { headers: CORS },
+    );
   } catch (err) {
     console.error("[chat]", err);
     return new Response(
