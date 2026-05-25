@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase-client";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,7 +6,10 @@ import { PageHeader } from "@/components/AppShell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { gbp, fmtDate, PIPELINE_STAGES } from "@/lib/format";
-import { Users, FileText, Receipt, CheckSquare, Plus } from "lucide-react";
+import { Users, Receipt, CheckSquare, Plus, MessageSquare } from "lucide-react";
+import { AiActiveToggle } from "@/routes/chats";
+import { useEffect } from "react";
+import { toast } from "sonner";
 
 function Kpi({ label, value, icon: Icon }: { label: string; value: string; icon: any }) {
   return (
