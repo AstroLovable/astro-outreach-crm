@@ -260,11 +260,12 @@ Deno.serve(async (req) => {
       }
       reply = rawReply;
 
-      await db.from("chat_messages").insert({
+      const { data: inserted } = await db.from("chat_messages").insert({
         session_id: sessionId!,
         role: "assistant",
         content: reply,
-      });
+      }).select("id").single();
+      var replyId = inserted?.id ?? null;
 
       if (handover) {
         await triggerHandover(url, serviceKey, sessionId!, body.pageUrl ?? null);
