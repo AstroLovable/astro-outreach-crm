@@ -60,11 +60,11 @@ const JS = `(function(){
       .then(function(r){
         if(r && Array.isArray(r.messages)){
           r.messages.forEach(function(m){
-            if(m.created_at > lastSeenAt){
-              lastSeenAt = m.created_at;
-              if(m.role === 'human' || m.role === 'assistant'){
-                add(m.role, m.content);
-              }
+            if(m.created_at > lastSeenAt) lastSeenAt = m.created_at;
+            if(seenIds[m.id]) return;
+            seenIds[m.id] = 1;
+            if(m.role === 'human' || m.role === 'assistant'){
+              add(m.role, m.content);
             }
           });
         }
