@@ -91,9 +91,9 @@ const JS = `(function(){
           sessionId = r.sessionId;
           if(!pollTimer) pollTimer = setInterval(poll, 3000);
         }
+        if(r.replyId) seenIds[r.replyId] = 1;
         if(r.reply) {
           add('bot', r.reply);
-          lastSeenAt = new Date().toISOString();
         } else if(r.error) add('bot', '⚠ '+r.error);
       })
       .catch(function(err){ add('bot', '⚠ Network error'); console.error(err); });
