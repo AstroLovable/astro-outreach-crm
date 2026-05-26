@@ -14,6 +14,13 @@ export interface Settings {
   services: { name: string; price: number }[];
   chatbot_system_prompt: string;
   notify_new_chat: boolean;
+  idle_close_hours: number;
+  greeting_delay_seconds: number;
+  notification_sound: boolean;
+  office_hours_start: string;
+  office_hours_end: string;
+  office_days: number[];
+  office_timezone: string;
 }
 
 export function useSettings() {
@@ -25,17 +32,11 @@ export function useSettings() {
     enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("settings")
-        .select("*")
-        .eq("owner_id", user!.id)
-        .maybeSingle();
+        .from("settings").select("*").eq("owner_id", user!.id).maybeSingle();
       if (error) throw error;
       if (!data) {
         const { data: created, error: ce } = await supabase
-          .from("settings")
-          .insert({ owner_id: user!.id })
-          .select()
-          .single();
+          .from("settings").insert({ owner_id: user!.id }).select().single();
         if (ce) throw ce;
         return created as unknown as Settings;
       }
@@ -46,11 +47,7 @@ export function useSettings() {
   const update = useMutation({
     mutationFn: async (patch: Partial<Settings>) => {
       const { data, error } = await supabase
-        .from("settings")
-        .update(patch)
-        .eq("owner_id", user!.id)
-        .select()
-        .single();
+        .from("settings").update(patch).eq("owner_id", user!.id).select().single();
       if (error) throw error;
       return data;
     },

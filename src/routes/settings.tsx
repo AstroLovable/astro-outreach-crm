@@ -11,12 +11,16 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Copy } from "lucide-react";
 
+const WEEKDAYS = [
+  { d: 1, l: "Mon" }, { d: 2, l: "Tue" }, { d: 3, l: "Wed" },
+  { d: 4, l: "Thu" }, { d: 5, l: "Fri" }, { d: 6, l: "Sat" }, { d: 0, l: "Sun" },
+];
+
 function SettingsView() {
   const { data, update, isLoading } = useSettings();
   const [form, setForm] = useState<any>(null);
 
   useEffect(() => { if (data && !form) setForm(data); }, [data, form]);
-
   if (isLoading || !form) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const signupLink = typeof window !== "undefined" ? `${window.location.origin}/auth?signup=1` : "/auth?signup=1";
@@ -27,6 +31,13 @@ function SettingsView() {
         company_name: form.company_name, company_email: form.company_email, company_website: form.company_website,
         vat_enabled: form.vat_enabled, invoice_prefix: form.invoice_prefix, services: form.services,
         chatbot_system_prompt: form.chatbot_system_prompt, notify_new_chat: form.notify_new_chat,
+        idle_close_hours: Number(form.idle_close_hours) || 24,
+        greeting_delay_seconds: Number(form.greeting_delay_seconds) || 60,
+        notification_sound: form.notification_sound,
+        office_hours_start: form.office_hours_start,
+        office_hours_end: form.office_hours_end,
+        office_days: form.office_days,
+        office_timezone: form.office_timezone,
       });
       toast.success("Settings saved");
     } catch (e: any) { toast.error(e.message); }
@@ -35,6 +46,11 @@ function SettingsView() {
   const copy = async () => {
     await navigator.clipboard.writeText(signupLink);
     toast.success("Signup link copied");
+  };
+
+  const toggleDay = (d: number) => {
+    const has = form.office_days.includes(d);
+    setForm({ ...form, office_days: has ? form.office_days.filter((x: number) => x !== d) : [...form.office_days, d] });
   };
 
   return (
@@ -52,7 +68,6 @@ function SettingsView() {
 
       <Card className="card-surface p-6 space-y-3">
         <h2 className="font-semibold">Account access</h2>
-        <p className="text-sm text-muted-foreground">The public homepage no longer shows a signup button. Use this private link to create a new operator account.</p>
         <div className="flex gap-2">
           <Input readOnly value={signupLink} className="font-mono text-xs" />
           <Button variant="outline" onClick={copy}><Copy className="h-4 w-4 mr-1" />Copy</Button>
@@ -74,17 +89,51 @@ function SettingsView() {
       <Card className="card-surface p-6 space-y-4">
         <h2 className="font-semibold">Chatbot</h2>
         <div><Label>System prompt</Label><Textarea rows={4} value={form.chatbot_system_prompt} onChange={(e) => setForm({ ...form, chatbot_system_prompt: e.target.value })} /></div>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div>
+            <Label>Pre-chat greeting delay (seconds)</Label>
+            <Input type="number" value={form.greeting_delay_seconds} onChange={(e) => setForm({ ...form, greeting_delay_seconds: e.target.value })} />
+          </div>
+          <div>
+            <Label>Auto-close idle chats after (hours)</Label>
+            <Input type="number" value={form.idle_close_hours} onChange={(e) => setForm({ ...form, idle_close_hours: e.target.value })} />
+          </div>
+          <div className="flex items-end gap-3">
+            <Switch checked={form.notification_sound} onCheckedChange={(v) => setForm({ ...form, notification_sound: v })} />
+            <Label>Play sound on new chat</Label>
+          </div>
+        </div>
         <div className="flex items-center gap-3"><Switch checked={form.notify_new_chat} onCheckedChange={(v) => setForm({ ...form, notify_new_chat: v })} /><Label>Email me on new human-handoff requests</Label></div>
+      </Card>
+
+      <Card className="card-surface p-6 space-y-4">
+        <h2 className="font-semibold">Office hours</h2>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div><Label>Start</Label><Input type="time" value={form.office_hours_start} onChange={(e) => setForm({ ...form, office_hours_start: e.target.value })} /></div>
+          <div><Label>End</Label><Input type="time" value={form.office_hours_end} onChange={(e) => setForm({ ...form, office_hours_end: e.target.value })} /></div>
+          <div><Label>Timezone</Label><Input value={form.office_timezone} onChange={(e) => setForm({ ...form, office_timezone: e.target.value })} /></div>
+        </div>
+        <div>
+          <Label>Working days</Label>
+          <div className="flex gap-2 mt-2 flex-wrap">
+            {WEEKDAYS.map(w => (
+              <button key={w.d} type="button" onClick={() => toggleDay(w.d)}
+                className={`px-3 py-1.5 rounded-md text-xs border ${form.office_days.includes(w.d) ? "bg-accent text-accent-foreground border-accent" : "bg-background border-border"}`}>
+                {w.l}
+              </button>
+            ))}
+          </div>
+        </div>
       </Card>
 
       <div className="flex justify-end"><Button onClick={save} disabled={update.isPending}>Save changes</Button></div>
 
-      <EmbedSnippet businessName={form.company_name} />
+      <EmbedSnippet businessName={form.company_name} greetingDelay={form.greeting_delay_seconds} />
     </div>
   );
 }
 
-function EmbedSnippet({ businessName }: { businessName: string }) {
+function EmbedSnippet({ businessName, greetingDelay }: { businessName: string; greetingDelay: number }) {
   const origin = typeof window !== "undefined" ? window.location.origin : "https://your-crm.lovable.app";
   const snippet = `<!-- AstroLabs & Co. CRM chat widget -->
 <script
@@ -93,6 +142,7 @@ function EmbedSnippet({ businessName }: { businessName: string }) {
   data-business="${(businessName || "").replace(/"/g, "&quot;")}"
   data-title="Chat with us"
   data-color="#4A6FA5"
+  data-greeting-delay="${greetingDelay}"
   defer
 ></script>`;
   const copy = async () => {
@@ -104,21 +154,19 @@ function EmbedSnippet({ businessName }: { businessName: string }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-semibold">Website chat embed</h2>
-          <p className="text-sm text-muted-foreground">Paste this snippet just before <code>&lt;/body&gt;</code> on any site to add the chat bubble. New conversations show up in Chats.</p>
+          <p className="text-sm text-muted-foreground">Paste before <code>&lt;/body&gt;</code> on any site.</p>
         </div>
         <Button variant="outline" size="sm" onClick={copy}><Copy className="h-4 w-4 mr-1" />Copy</Button>
       </div>
-      <Textarea readOnly rows={9} value={snippet} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
-      <p className="text-xs text-muted-foreground">Customise <code>data-title</code> and <code>data-color</code> (hex) as needed.</p>
+      <Textarea readOnly rows={10} value={snippet} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
     </Card>
   );
 }
 
-
 export const Route = createFileRoute("/settings")({
   component: () => (
     <AppShell>
-      <PageHeader title="Settings" subtitle="Company, services, chatbot prompt and notifications" />
+      <PageHeader title="Settings" subtitle="Company, chatbot, office hours and notifications" />
       <SettingsView />
     </AppShell>
   ),

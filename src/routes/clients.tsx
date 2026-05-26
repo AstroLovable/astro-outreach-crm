@@ -128,36 +128,51 @@ function ClientsView() {
       <Card className="card-surface p-4 mb-4">
         <Input placeholder="Search clients…" value={query} onChange={(e) => setQuery(e.target.value)} />
       </Card>
-      <Card className="card-surface overflow-hidden">
-        <table className="w-full text-sm">
+      <Card className="card-surface overflow-x-auto">
+        <table className="w-full text-sm min-w-[760px]">
           <thead className="bg-muted/40 text-left">
             <tr>
               <th className="p-3 font-medium">Name</th>
               <th className="p-3 font-medium">Business</th>
+              <th className="p-3 font-medium">Email</th>
+              <th className="p-3 font-medium">Phone</th>
               <th className="p-3 font-medium">Package</th>
               <th className="p-3 font-medium">Stage</th>
+              <th className="p-3 font-medium">Follow-up</th>
               <th className="p-3 font-medium">Created</th>
               <th className="p-3"></th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">No clients yet.</td></tr>
-            ) : filtered.map((c) => (
-              <tr key={c.id} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setDetail(c)}>
-                <td className="p-3 font-medium">{c.name}</td>
-                <td className="p-3">{c.business || "—"}</td>
-                <td className="p-3">{c.package || "—"}</td>
-                <td className="p-3"><span className="rounded-md bg-accent/10 text-accent px-2 py-1 text-xs">{c.stage}</span></td>
-                <td className="p-3 text-muted-foreground">{fmtDate(c.created_at)}</td>
-                <td className="p-3 text-right">
-                  <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setEditing(c); setOpen(true); }}>Edit</Button>
-                  <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); if (confirm("Delete client?")) remove.mutate(c.id); }}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </td>
-              </tr>
-            ))}
+              <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">No clients yet.</td></tr>
+            ) : filtered.map((c) => {
+              const fuDate = (c as any).follow_up_date as string | null;
+              const fuDone = (c as any).follow_up_done as boolean;
+              const fuDue = fuDate && !fuDone && new Date(fuDate) <= new Date();
+              return (
+                <tr key={c.id} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setDetail(c)}>
+                  <td className="p-3 font-medium">{c.name}</td>
+                  <td className="p-3">{c.business || "—"}</td>
+                  <td className="p-3">{c.email || "—"}</td>
+                  <td className="p-3">{c.phone || "—"}</td>
+                  <td className="p-3">{c.package || "—"}</td>
+                  <td className="p-3"><span className="rounded-md bg-accent/10 text-accent px-2 py-1 text-xs">{c.stage}</span></td>
+                  <td className="p-3">
+                    {fuDate ? (
+                      <span className={fuDue ? "text-destructive font-medium" : ""}>{fmtDate(fuDate)}</span>
+                    ) : "—"}
+                  </td>
+                  <td className="p-3 text-muted-foreground">{fmtDate(c.created_at)}</td>
+                  <td className="p-3 text-right whitespace-nowrap">
+                    <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setEditing(c); setOpen(true); }}>Edit</Button>
+                    <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); if (confirm("Delete client?")) remove.mutate(c.id); }}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </Card>
@@ -200,6 +215,14 @@ function ClientFormDialog({ open, onOpenChange, editing, onSave }: any) {
                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                 <SelectContent>{PACKAGES.map((p) => <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Follow-up date</Label>
+              <Input type="date" value={f.follow_up_date || ""} onChange={(e) => setF({ ...f, follow_up_date: e.target.value || null })} />
+            </div>
+            <div className="flex items-end gap-2">
+              <input type="checkbox" id="fudone" checked={!!f.follow_up_done} onChange={(e) => setF({ ...f, follow_up_done: e.target.checked })} />
+              <Label htmlFor="fudone">Follow-up done</Label>
             </div>
             <div className="col-span-2">
               <Label>Stage</Label>

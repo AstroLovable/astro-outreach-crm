@@ -1,12 +1,6 @@
-// Public chat edge function — proxies to Groq AI, logs conversation, extracts client data,
-// and handles AI-initiated handover via the HANDOVER_REQUESTED token.
-//
-// Accepts:
-//   { sessionId?, pageUrl?, message, systemPrompt? }   (widget chat)
-//   { action: 'poll', sessionId, since }               (widget polling)
-//   { messages, systemPrompt }                         (raw passthrough)
-// Returns: { sessionId, reply, handover? }
-
+// Public chat edge function — Groq AI, polling, client data extraction,
+// AI-initiated handover, contact form intake, office hours, and per-session
+// system prompt snapshot.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const CORS = {
@@ -19,6 +13,12 @@ const CORS = {
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.3-70b-versatile";
 const HANDOVER_TOKEN = "HANDOVER_REQUESTED";
+const CONTACT_TOKEN = "SHOW_CONTACT_FORM";
+
+const DEFAULT_PROMPT =
+  `You are a helpful customer support assistant for AstroLabs & Co. Answer briefly and warmly. ` +
+  `If the visitor asks for a quote or wants to speak to a human, include the exact token ${CONTACT_TOKEN} in your response. ` +
+  `If you cannot help, include the exact token ${HANDOVER_TOKEN} and a human teammate will take over.`;
 
 async function callGroq(
   systemPrompt: string,
@@ -42,13 +42,39 @@ async function callGroq(
   return (data.choices?.[0]?.message?.content ?? "").trim();
 }
 
+function isWithinOfficeHours(settings: {
+  office_hours_start: string;
+  office_hours_end: string;
+  office_days: number[];
+  office_timezone: string;
+} | null) {
+  if (!settings) return true;
+  try {
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat("en-GB", {
+      timeZone: settings.office_timezone || "Europe/London",
+      weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(now);
+    const wkMap: Record<string, number> = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+    const wk = wkMap[fmt.find(p => p.type === "weekday")?.value ?? "Mon"] ?? 1;
+    const hh = Number(fmt.find(p => p.type === "hour")?.value ?? "0");
+    const mm = Number(fmt.find(p => p.type === "minute")?.value ?? "0");
+    const cur = hh * 60 + mm;
+    const [sh, sm] = settings.office_hours_start.split(":").map(Number);
+    const [eh, em] = settings.office_hours_end.split(":").map(Number);
+    const start = sh * 60 + sm;
+    const end = eh * 60 + em;
+    return (settings.office_days ?? [1,2,3,4,5]).includes(wk) && cur >= start && cur < end;
+  } catch { return true; }
+}
+
 async function extractClientData(
   db: ReturnType<typeof createClient>,
   sessionId: string,
   transcript: string,
 ) {
   try {
-    const prompt = `Extract customer details from the chat below. Return strict JSON with keys: name (full name or null), business (company name or null), business_type (industry/type or null), email (or null), phone (or null). Only include values explicitly stated by the VISITOR. Use null when unknown.\n\nCHAT:\n${transcript}`;
+    const prompt = `Extract customer details from the chat below. Return strict JSON with keys: name, business, business_type, email, phone. Only values explicitly stated by VISITOR. Use null when unknown.\n\nCHAT:\n${transcript}`;
     const raw = await callGroq(
       "You extract customer contact info from chat transcripts. Output only valid JSON.",
       [{ role: "user", content: prompt }],
@@ -56,49 +82,31 @@ async function extractClientData(
     );
     let parsed: Record<string, string | null> = {};
     try { parsed = JSON.parse(raw); } catch { return null; }
-
     const { name, business, business_type, email, phone } = parsed;
     if (!name && !email && !phone && !business) return null;
 
-    // Find session owner
     const { data: sess } = await db
-      .from("chat_sessions")
-      .select("owner_id, visitor_email, visitor_name, business")
-      .eq("id", sessionId)
-      .maybeSingle();
+      .from("chat_sessions").select("owner_id, visitor_email, visitor_name, business")
+      .eq("id", sessionId).maybeSingle();
     if (!sess?.owner_id) return null;
 
-    // Update visitor info on session
-    await db
-      .from("chat_sessions")
-      .update({
-        visitor_name: name ?? sess.visitor_name,
-        visitor_email: email ?? sess.visitor_email,
-        business: business ?? sess.business,
-      })
-      .eq("id", sessionId);
+    await db.from("chat_sessions").update({
+      visitor_name: name ?? sess.visitor_name,
+      visitor_email: email ?? sess.visitor_email,
+      business: business ?? sess.business,
+    }).eq("id", sessionId);
 
-    // Match existing client by email (preferred) or name
-    let existing: { id: string; name: string } | null = null;
+    let existing: { id: string } | null = null;
     if (email) {
-      const { data } = await db
-        .from("clients")
-        .select("id, name")
-        .eq("owner_id", sess.owner_id)
-        .ilike("email", email)
-        .maybeSingle();
-      existing = (data as { id: string; name: string } | null) ?? null;
+      const { data } = await db.from("clients").select("id")
+        .eq("owner_id", sess.owner_id).ilike("email", email).maybeSingle();
+      existing = data as { id: string } | null;
     }
     if (!existing && name) {
-      const { data } = await db
-        .from("clients")
-        .select("id, name")
-        .eq("owner_id", sess.owner_id)
-        .ilike("name", name)
-        .maybeSingle();
-      existing = (data as { id: string; name: string } | null) ?? null;
+      const { data } = await db.from("clients").select("id")
+        .eq("owner_id", sess.owner_id).ilike("name", name).maybeSingle();
+      existing = data as { id: string } | null;
     }
-
     const patch: Record<string, unknown> = {};
     if (name) patch.name = name;
     if (business) patch.business = business;
@@ -108,199 +116,187 @@ async function extractClientData(
 
     if (existing) {
       await db.from("clients").update(patch).eq("id", existing.id);
-      return { id: existing.id, name: existing.name, created: false };
     } else {
-      const insertRow = {
+      await db.from("clients").insert({
         owner_id: sess.owner_id,
         name: name ?? business ?? email ?? "Unnamed lead",
-        business: business ?? null,
-        service_type: business_type ?? null,
-        email: email ?? null,
-        phone: phone ?? null,
-        stage: "Lead",
-        notes: `Auto-created from chat session ${sessionId}`,
-      };
-      const { data: created } = await db.from("clients").insert(insertRow).select("id, name").single();
-      if (created) {
-        await db.from("activity").insert({
-          owner_id: sess.owner_id,
-          type: "chat",
-          description: `New lead from chat: ${created.name}`,
-          ref_id: created.id,
-        });
-      }
-      return created ? { id: created.id, name: created.name, created: true } : null;
+        business: business ?? null, service_type: business_type ?? null,
+        email: email ?? null, phone: phone ?? null,
+        stage: "Lead", notes: `Auto-created from chat session ${sessionId}`,
+      });
     }
-  } catch (e) {
-    console.error("[extractClientData]", e);
-    return null;
-  }
+  } catch (e) { console.error("[extractClientData]", e); }
 }
 
-async function triggerHandover(
-  url: string,
-  serviceKey: string,
-  sessionId: string,
-  pageUrl: string | null,
-) {
+async function triggerHandover(url: string, serviceKey: string, sessionId: string, pageUrl: string | null) {
   try {
     await fetch(`${url}/functions/v1/handoff`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${serviceKey}`,
-        apikey: serviceKey,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}`, apikey: serviceKey },
       body: JSON.stringify({ sessionId, pageUrl, reason: "AI requested handover" }),
     });
-  } catch (e) {
-    console.error("[triggerHandover]", e);
-  }
+  } catch (e) { console.error("[triggerHandover]", e); }
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-
   try {
     const body = await req.json();
-    const systemPrompt =
-      body.systemPrompt ||
-      `You are a helpful customer support assistant for AstroLabs & Co. Answer briefly and warmly. If you cannot help or the visitor explicitly asks to speak to a human, include the exact token ${HANDOVER_TOKEN} anywhere in your response and a human teammate will take over.`;
-
     const url = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const db = createClient(url, serviceKey);
 
-    // ── Poll mode ─────────────────────────────────────────────
+    // ── Poll ─────────────────────────────────────────────
     if (body.action === "poll" && body.sessionId) {
       const since = typeof body.since === "string" ? body.since : "1970-01-01T00:00:00Z";
-      const { data: messages } = await db
-        .from("chat_messages")
-        .select("id, role, content, created_at")
-        .eq("session_id", body.sessionId)
-        .in("role", ["assistant", "human"])
-        .gt("created_at", since)
+      const { data: messages } = await db.from("chat_messages")
+        .select("id, role, content, created_at").eq("session_id", body.sessionId)
+        .in("role", ["assistant", "human"]).gt("created_at", since)
         .order("created_at", { ascending: true });
-      const { data: sess } = await db
-        .from("chat_sessions")
-        .select("status")
-        .eq("id", body.sessionId)
-        .maybeSingle();
-      return new Response(
-        JSON.stringify({ messages: messages ?? [], status: sess?.status ?? null }),
-        { headers: CORS },
-      );
+      const { data: sess } = await db.from("chat_sessions")
+        .select("status").eq("id", body.sessionId).maybeSingle();
+      return new Response(JSON.stringify({ messages: messages ?? [], status: sess?.status ?? null }), { headers: CORS });
     }
 
-    // ── Raw passthrough ───────────────────────────────────────
-    if (Array.isArray(body.messages) && !body.message) {
-      const reply = await callGroq(systemPrompt, body.messages);
-      return new Response(JSON.stringify({ reply }), { headers: CORS });
+    // ── Close ────────────────────────────────────────────
+    if (body.action === "close" && body.sessionId) {
+      await db.from("chat_sessions")
+        .update({ status: "closed", updated_at: new Date().toISOString() })
+        .eq("id", body.sessionId);
+      return new Response(JSON.stringify({ ok: true }), { headers: CORS });
     }
 
-    // ── Widget mode ───────────────────────────────────────────
+    // ── Contact form submit ──────────────────────────────
+    if (body.action === "contact" && body.sessionId) {
+      const { name, business, business_type, email, phone } = body.contact || {};
+      const { data: sess } = await db.from("chat_sessions")
+        .select("owner_id, visitor_name, visitor_email, business").eq("id", body.sessionId).maybeSingle();
+      if (sess?.owner_id) {
+        await db.from("chat_sessions").update({
+          visitor_name: name || sess.visitor_name,
+          visitor_email: email || sess.visitor_email,
+          business: business || sess.business,
+        }).eq("id", body.sessionId);
+
+        let existing: { id: string } | null = null;
+        if (email) {
+          const { data } = await db.from("clients").select("id")
+            .eq("owner_id", sess.owner_id).ilike("email", email).maybeSingle();
+          existing = data as { id: string } | null;
+        }
+        const patch: Record<string, unknown> = {
+          name: name || email || "New lead",
+          business: business || null, service_type: business_type || null,
+          email: email || null, phone: phone || null,
+        };
+        if (existing) {
+          await db.from("clients").update(patch).eq("id", existing.id);
+        } else {
+          await db.from("clients").insert({
+            owner_id: sess.owner_id, ...patch, stage: "Lead",
+            notes: `Submitted via chat widget contact form (session ${body.sessionId})`,
+          });
+        }
+        await db.from("activity").insert({
+          owner_id: sess.owner_id, type: "chat",
+          description: `Contact form submitted: ${name || email || "anonymous"}`,
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), { headers: CORS });
+    }
+
+    // ── Widget chat ──────────────────────────────────────
     let sessionId: string | null = body.sessionId ?? null;
+    let sessionRow: { status: string; system_prompt: string | null; owner_id: string | null } | null = null;
+
     if (!sessionId) {
-      // Default to single-owner setup: attach to the first settings owner.
-      const { data: ownerRow } = await db
-        .from("settings")
-        .select("owner_id")
-        .limit(1)
-        .maybeSingle();
-      const { data, error } = await db
-        .from("chat_sessions")
-        .insert({
-          page_url: body.pageUrl ?? null,
-          status: "ai_handling",
-          owner_id: ownerRow?.owner_id ?? null,
-        })
-        .select("id")
-        .single();
+      const { data: ownerRow } = await db.from("settings")
+        .select("owner_id, chatbot_system_prompt, office_hours_start, office_hours_end, office_days, office_timezone")
+        .limit(1).maybeSingle();
+      const snapshot = (ownerRow?.chatbot_system_prompt as string | undefined)?.trim() || DEFAULT_PROMPT;
+      // Append office-hours rule
+      const finalPrompt = ownerRow
+        ? `${snapshot}\n\nIMPORTANT: If outside office hours (currently ${
+            isWithinOfficeHours(ownerRow as any) ? "OPEN" : "CLOSED"
+          }), tell the visitor the team is unavailable and include ${CONTACT_TOKEN} in your reply.`
+        : snapshot;
+
+      const { data, error } = await db.from("chat_sessions").insert({
+        page_url: body.pageUrl ?? null, status: "ai_handling",
+        owner_id: (ownerRow as any)?.owner_id ?? null,
+        system_prompt: finalPrompt,
+      }).select("id, status, system_prompt, owner_id").single();
       if (error) throw error;
       sessionId = data.id;
+      sessionRow = data as any;
+    } else {
+      const { data } = await db.from("chat_sessions")
+        .select("status, system_prompt, owner_id").eq("id", sessionId).maybeSingle();
+      sessionRow = data as any;
+    }
+
+    if (sessionRow?.status === "closed") {
+      return new Response(JSON.stringify({ sessionId, error: "closed", status: "closed" }), { headers: CORS });
     }
 
     if (typeof body.message === "string" && body.message.trim()) {
       await db.from("chat_messages").insert({
-        session_id: sessionId,
-        role: "visitor",
-        content: body.message.slice(0, 2000),
+        session_id: sessionId, role: "visitor", content: body.message.slice(0, 2000),
       });
+      // Bump unread for owner
+      await db.rpc; // no-op placeholder; direct update below
+      const { data: cur } = await db.from("chat_sessions").select("unread_count").eq("id", sessionId).maybeSingle();
+      await db.from("chat_sessions").update({
+        unread_count: ((cur?.unread_count as number) ?? 0) + 1,
+        updated_at: new Date().toISOString(),
+      }).eq("id", sessionId);
     }
-
-    const { data: session } = await db
-      .from("chat_sessions")
-      .select("status")
-      .eq("id", sessionId!)
-      .maybeSingle();
 
     let reply = "";
     let handover = false;
+    let showContact = false;
     let replyId: string | null = null;
-    if (session?.status === "ai_handling") {
-      const { data: history } = await db
-        .from("chat_messages")
-        .select("role, content")
-        .eq("session_id", sessionId!)
-        .order("created_at", { ascending: true })
-        .limit(20);
 
+    if (sessionRow?.status === "ai_handling") {
+      const { data: history } = await db.from("chat_messages")
+        .select("role, content").eq("session_id", sessionId!)
+        .order("created_at", { ascending: true }).limit(20);
       const aiMessages = (history ?? []).map((m: { role: string; content: string }) => ({
-        role: m.role === "visitor" ? "user" : "assistant",
-        content: m.content,
+        role: m.role === "visitor" ? "user" : "assistant", content: m.content,
       }));
-
-      let rawReply = await callGroq(systemPrompt, aiMessages);
+      let rawReply = await callGroq(sessionRow.system_prompt || DEFAULT_PROMPT, aiMessages);
 
       if (rawReply.includes(HANDOVER_TOKEN)) {
         handover = true;
         rawReply = rawReply.replace(new RegExp(HANDOVER_TOKEN, "g"), "").trim();
-        if (!rawReply) {
-          rawReply = "Let me connect you with a human teammate — one moment.";
-        }
       }
+      if (rawReply.includes(CONTACT_TOKEN)) {
+        showContact = true;
+        rawReply = rawReply.replace(new RegExp(CONTACT_TOKEN, "g"), "").trim();
+      }
+      if (!rawReply) rawReply = "One moment — let me connect you.";
       reply = rawReply;
 
       const { data: inserted } = await db.from("chat_messages").insert({
-        session_id: sessionId!,
-        role: "assistant",
-        content: reply,
+        session_id: sessionId!, role: "assistant", content: reply,
       }).select("id").single();
       replyId = inserted?.id ?? null;
 
-      if (handover) {
-        await triggerHandover(url, serviceKey, sessionId!, body.pageUrl ?? null);
-      }
+      if (handover) await triggerHandover(url, serviceKey, sessionId!, body.pageUrl ?? null);
     }
 
-    // Fire-and-forget client extraction
     if (typeof body.message === "string" && body.message.trim()) {
-      const { data: history2 } = await db
-        .from("chat_messages")
-        .select("role, content")
-        .eq("session_id", sessionId!)
-        .order("created_at", { ascending: true })
-        .limit(40);
+      const { data: history2 } = await db.from("chat_messages")
+        .select("role, content").eq("session_id", sessionId!)
+        .order("created_at", { ascending: true }).limit(40);
       const transcript = (history2 ?? [])
-        .map((m: { role: string; content: string }) => `${m.role.toUpperCase()}: ${m.content}`)
-        .join("\n");
+        .map((m: { role: string; content: string }) => `${m.role.toUpperCase()}: ${m.content}`).join("\n");
       extractClientData(db, sessionId!, transcript).catch((e) => console.error(e));
     }
 
-    await db
-      .from("chat_sessions")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", sessionId!);
-
-    return new Response(
-      JSON.stringify({ sessionId, reply, replyId, handover }),
-      { headers: CORS },
-    );
+    return new Response(JSON.stringify({ sessionId, reply, replyId, handover, showContact }), { headers: CORS });
   } catch (err) {
     console.error("[chat]", err);
-    return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }),
-      { status: 500, headers: CORS },
-    );
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }), { status: 500, headers: CORS });
   }
 });

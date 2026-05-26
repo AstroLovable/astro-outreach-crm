@@ -8,6 +8,7 @@ import {
   type DragEndEvent, type DragStartEvent, useDroppable, useDraggable,
 } from "@dnd-kit/core";
 import { useMemo, useState } from "react";
+import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/pipeline")({
   component: () => (
@@ -42,11 +43,15 @@ function PipelineBoard() {
     }
   };
 
+  const saveNote = (id: string, note: string) => {
+    update.mutate({ id, patch: { status_note: note } as any });
+  };
+
   return (
     <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         {PIPELINE_STAGES.map((stage) => (
-          <Column key={stage} stage={stage} clients={grouped[stage] || []} />
+          <Column key={stage} stage={stage} clients={grouped[stage] || []} onSaveNote={saveNote} />
         ))}
       </div>
       <DragOverlay>{active && <ClientCard client={active} dragging />}</DragOverlay>
@@ -54,7 +59,7 @@ function PipelineBoard() {
   );
 }
 
-function Column({ stage, clients }: { stage: string; clients: Client[] }) {
+function Column({ stage, clients, onSaveNote }: { stage: string; clients: Client[]; onSaveNote: (id: string, n: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage });
   return (
     <Card ref={setNodeRef as any} className={`card-surface p-3 min-h-[300px] transition-colors ${isOver ? "ring-2 ring-accent" : ""}`}>
@@ -63,27 +68,52 @@ function Column({ stage, clients }: { stage: string; clients: Client[] }) {
         <div className="text-xs text-muted-foreground">{clients.length}</div>
       </div>
       <div className="space-y-2">
-        {clients.map((c) => <Draggable key={c.id} client={c} />)}
+        {clients.map((c) => <Draggable key={c.id} client={c} onSaveNote={onSaveNote} />)}
       </div>
     </Card>
   );
 }
 
-function Draggable({ client }: { client: Client }) {
+function Draggable({ client, onSaveNote }: { client: Client; onSaveNote: (id: string, n: string) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: client.id });
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} className={isDragging ? "opacity-30" : ""}>
-      <ClientCard client={client} />
+    <div ref={setNodeRef} className={isDragging ? "opacity-30" : ""}>
+      <ClientCard client={client} dragHandle={{ ...listeners, ...attributes }} onSaveNote={onSaveNote} />
     </div>
   );
 }
 
-function ClientCard({ client, dragging }: { client: Client; dragging?: boolean }) {
+function ClientCard({
+  client, dragging, dragHandle, onSaveNote,
+}: { client: Client; dragging?: boolean; dragHandle?: any; onSaveNote?: (id: string, n: string) => void }) {
   const stale = daysSince(client.stage_changed_at) >= 14;
+  const [note, setNote] = useState((client as any).status_note || "");
+  const [editing, setEditing] = useState(false);
+
   return (
     <div className={`rounded-md border bg-background p-3 ${dragging ? "shadow-lg" : ""}`}>
-      <div className="text-sm font-medium">{client.name}</div>
-      {client.business && <div className="text-xs text-muted-foreground">{client.business}</div>}
+      <div {...(dragHandle || {})} className="cursor-grab active:cursor-grabbing">
+        <div className="text-sm font-medium">{client.name}</div>
+        {client.business && <div className="text-xs text-muted-foreground">{client.business}</div>}
+      </div>
+      {onSaveNote && (
+        editing ? (
+          <Input
+            autoFocus
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onBlur={() => { setEditing(false); if (note !== (client as any).status_note) onSaveNote(client.id, note); }}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
+            className="mt-1 h-7 text-xs"
+            placeholder="Status note…"
+          />
+        ) : (
+          <div onClick={() => setEditing(true)}
+               className="mt-1 text-[11px] text-muted-foreground italic cursor-text min-h-[16px]">
+            {note || "+ add note"}
+          </div>
+        )
+      )}
       <div className="flex items-center justify-between mt-2 text-[11px] text-muted-foreground">
         <span>{client.package || "—"}</span>
         <span className={stale ? "text-destructive" : ""}>{daysSince(client.stage_changed_at)}d</span>
