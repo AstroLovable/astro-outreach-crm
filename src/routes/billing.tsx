@@ -23,6 +23,19 @@ import { downloadDocPDF } from "@/lib/pdf";
 type Kind = "quote" | "invoice";
 type LineItem = { description: string; qty: number; unit_price: number };
 
+const PACKAGE_PRESETS: Record<string, { items: LineItem[] }> = {
+  Launch: { items: [
+    { description: "Launch package — 1-page site, branded design, mobile-optimised", qty: 1, unit_price: 299 },
+  ]},
+  Standard: { items: [
+    { description: "Standard package — up to 5 pages, CMS-ready, contact form", qty: 1, unit_price: 399 },
+  ]},
+  Pro: { items: [
+    { description: "Pro package — up to 10 pages, bespoke design, SEO setup", qty: 1, unit_price: 699 },
+  ]},
+  Custom: { items: [] },
+};
+
 export const Route = createFileRoute("/billing")({
   component: () => (
     <AppShell>
@@ -161,9 +174,22 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
       client_id: "", issue_date: new Date().toISOString().slice(0, 10),
       due_date: "", line_items: [{ description: "", qty: 1, unit_price: 0 }] as LineItem[],
       vat: settings?.vat_enabled ?? true, notes: "", status: kind === "invoice" ? "Draft" : "Draft", number: editing?.number || "",
+      package: "", job_reference: "", deposit_split: false,
     };
   }
   useEffect(() => { if (open && !wasOpen.current) setF(initial()); wasOpen.current = open; }, [open, editing, settings]);
+
+  const applyPackage = (pkg: string) => {
+    const preset = PACKAGE_PRESETS[pkg];
+    if (!preset) { setF({ ...f, package: pkg }); return; }
+    const presetDescriptions = new Set(
+      Object.values(PACKAGE_PRESETS).flatMap((p) => p.items.map((i) => i.description)),
+    );
+    const customLines = (f.line_items || []).filter(
+      (li: LineItem) => !presetDescriptions.has(li.description),
+    );
+    setF({ ...f, package: pkg, line_items: [...preset.items, ...customLines] });
+  };
 
   const subtotal = (f.line_items || []).reduce((s: number, li: LineItem) => s + (Number(li.qty) || 0) * (Number(li.unit_price) || 0), 0);
   const vat_amount = f.vat ? subtotal * 0.2 : 0;
