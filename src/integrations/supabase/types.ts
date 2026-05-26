@@ -81,6 +81,8 @@ export type Database = {
           owner_id: string | null
           page_url: string | null
           status: string
+          system_prompt: string | null
+          unread_count: number
           updated_at: string
           visitor_email: string | null
           visitor_name: string | null
@@ -92,6 +94,8 @@ export type Database = {
           owner_id?: string | null
           page_url?: string | null
           status?: string
+          system_prompt?: string | null
+          unread_count?: number
           updated_at?: string
           visitor_email?: string | null
           visitor_name?: string | null
@@ -103,6 +107,8 @@ export type Database = {
           owner_id?: string | null
           page_url?: string | null
           status?: string
+          system_prompt?: string | null
+          unread_count?: number
           updated_at?: string
           visitor_email?: string | null
           visitor_name?: string | null
@@ -114,6 +120,8 @@ export type Database = {
           business: string | null
           created_at: string
           email: string | null
+          follow_up_date: string | null
+          follow_up_done: boolean
           id: string
           name: string
           notes: string | null
@@ -123,6 +131,7 @@ export type Database = {
           service_type: string | null
           stage: string
           stage_changed_at: string
+          status_note: string | null
           updated_at: string
           website: string | null
         }
@@ -130,6 +139,8 @@ export type Database = {
           business?: string | null
           created_at?: string
           email?: string | null
+          follow_up_date?: string | null
+          follow_up_done?: boolean
           id?: string
           name: string
           notes?: string | null
@@ -139,6 +150,7 @@ export type Database = {
           service_type?: string | null
           stage?: string
           stage_changed_at?: string
+          status_note?: string | null
           updated_at?: string
           website?: string | null
         }
@@ -146,6 +158,8 @@ export type Database = {
           business?: string | null
           created_at?: string
           email?: string | null
+          follow_up_date?: string | null
+          follow_up_done?: boolean
           id?: string
           name?: string
           notes?: string | null
@@ -155,6 +169,7 @@ export type Database = {
           service_type?: string | null
           stage?: string
           stage_changed_at?: string
+          status_note?: string | null
           updated_at?: string
           website?: string | null
         }
@@ -164,14 +179,17 @@ export type Database = {
         Row: {
           client_id: string | null
           created_at: string
+          deposit_part: string | null
           due_date: string | null
           id: string
           issue_date: string
+          job_reference: string | null
           line_items: Json
           notes: string | null
           number: string
           owner_id: string
           paid_at: string | null
+          parent_invoice_id: string | null
           status: string
           subtotal: number
           total: number
@@ -182,14 +200,17 @@ export type Database = {
         Insert: {
           client_id?: string | null
           created_at?: string
+          deposit_part?: string | null
           due_date?: string | null
           id?: string
           issue_date?: string
+          job_reference?: string | null
           line_items?: Json
           notes?: string | null
           number: string
           owner_id: string
           paid_at?: string | null
+          parent_invoice_id?: string | null
           status?: string
           subtotal?: number
           total?: number
@@ -200,14 +221,17 @@ export type Database = {
         Update: {
           client_id?: string | null
           created_at?: string
+          deposit_part?: string | null
           due_date?: string | null
           id?: string
           issue_date?: string
+          job_reference?: string | null
           line_items?: Json
           notes?: string | null
           number?: string
           owner_id?: string
           paid_at?: string | null
+          parent_invoice_id?: string | null
           status?: string
           subtotal?: number
           total?: number
@@ -221,6 +245,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_parent_invoice_id_fkey"
+            columns: ["parent_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
         ]
@@ -376,10 +407,17 @@ export type Database = {
           company_name: string
           company_website: string | null
           created_at: string
+          greeting_delay_seconds: number
           id: string
+          idle_close_hours: number
           invoice_prefix: string
           next_invoice_number: number
+          notification_sound: boolean
           notify_new_chat: boolean
+          office_days: number[]
+          office_hours_end: string
+          office_hours_start: string
+          office_timezone: string
           owner_id: string
           services: Json
           updated_at: string
@@ -391,10 +429,17 @@ export type Database = {
           company_name?: string
           company_website?: string | null
           created_at?: string
+          greeting_delay_seconds?: number
           id?: string
+          idle_close_hours?: number
           invoice_prefix?: string
           next_invoice_number?: number
+          notification_sound?: boolean
           notify_new_chat?: boolean
+          office_days?: number[]
+          office_hours_end?: string
+          office_hours_start?: string
+          office_timezone?: string
           owner_id: string
           services?: Json
           updated_at?: string
@@ -406,10 +451,17 @@ export type Database = {
           company_name?: string
           company_website?: string | null
           created_at?: string
+          greeting_delay_seconds?: number
           id?: string
+          idle_close_hours?: number
           invoice_prefix?: string
           next_invoice_number?: number
+          notification_sound?: boolean
           notify_new_chat?: boolean
+          office_days?: number[]
+          office_hours_end?: string
+          office_hours_start?: string
+          office_timezone?: string
           owner_id?: string
           services?: Json
           updated_at?: string
