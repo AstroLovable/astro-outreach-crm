@@ -11,7 +11,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/format";
-import { Send, Sparkles, X, UserPlus, Trash2 } from "lucide-react";
+import { Send, Sparkles, X, UserPlus, Trash2, ClipboardList } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { draftReply } from "@/lib/ai.functions";
 import {
