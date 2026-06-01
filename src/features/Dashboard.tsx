@@ -243,3 +243,53 @@ function LiveChatsCard() {
     </Card>
   );
 }
+
+function FollowUpsCard() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const followUps = useQuery({
+    queryKey: ["dash-followups", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name, business, follow_up_date, follow_up_done")
+        .eq("owner_id", user!.id)
+        .lte("follow_up_date", today)
+        .eq("follow_up_done", false)
+        .order("follow_up_date", { ascending: true });
+      return data || [];
+    },
+  });
+  const markDone = async (id: string) => {
+    await supabase.from("clients").update({ follow_up_date: null, follow_up_done: true }).eq("id", id);
+    qc.invalidateQueries({ queryKey: ["dash-followups"] });
+    qc.invalidateQueries({ queryKey: ["clients"] });
+    toast.success("Follow-up cleared");
+  };
+  const rows = followUps.data || [];
+  return (
+    <Card className="card-surface p-5 mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold">Follow-up reminders</h2>
+        <Link to="/clients" className="text-xs text-accent hover:underline">Open clients →</Link>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No follow-ups due today.</p>
+      ) : (
+        <ul className="divide-y">
+          {rows.map((c: any) => (
+            <li key={c.id} className="py-2.5 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium truncate">{c.name}{c.business ? ` · ${c.business}` : ""}</div>
+                <div className="text-[11px] text-muted-foreground">Due {c.follow_up_date}</div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => markDone(c.id)}>Mark done</Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
