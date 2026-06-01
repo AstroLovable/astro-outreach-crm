@@ -121,6 +121,10 @@ const JS = `(function(){
             if(m.created_at > lastSeenAt) lastSeenAt = m.created_at;
             if(seenIds[m.id]) return;
             seenIds[m.id] = 1;
+            if(m.content === '__SHOW_CONTACT_FORM__'){
+              showContactForm("A team member would like your details — please fill this in.");
+              return;
+            }
             if(m.role === 'human' || m.role === 'assistant'){
               hideTyping();
               add(m.role, m.content);
@@ -131,11 +135,35 @@ const JS = `(function(){
       }).catch(function(){});
   }
 
+  var humanTypingTimer = null;
+  function showHumanTyping(){
+    showTyping();
+    if(humanTypingTimer) clearTimeout(humanTypingTimer);
+    humanTypingTimer = setTimeout(function(){ hideTyping(); humanTypingTimer=null; }, 2000);
+  }
+
   function subscribeTyping(){
-    if(realtimeCh || !sessionId) return;
-    // Lightweight realtime via fetch-based broadcast not used; rely on polling for messages.
-    // Typing indicator from human via a separate poll on broadcasts is out of scope for the no-SDK widget,
-    // so we display a typing bubble only while AI is processing (handled at send time).
+    if(realtimeCh || !sessionId || typeof WebSocket === 'undefined') return;
+    try{
+      var wsUrl = SUPA.replace('https://','wss://') + '/realtime/v1/websocket?apikey=' + KEY + '&vsn=1.0.0';
+      var ws = new WebSocket(wsUrl);
+      var topic = 'realtime:chat:' + sessionId;
+      var hbTimer = null;
+      ws.onopen = function(){
+        ws.send(JSON.stringify({ topic: topic, event: 'phx_join', payload: { config: { broadcast: { self: false } } }, ref: '1' }));
+        hbTimer = setInterval(function(){
+          try{ ws.send(JSON.stringify({ topic:'phoenix', event:'heartbeat', payload:{}, ref:'hb' })); }catch(e){}
+        }, 25000);
+      };
+      ws.onmessage = function(ev){
+        try{
+          var m = JSON.parse(ev.data);
+          if(m.event === 'broadcast' && m.payload && m.payload.event === 'typing') showHumanTyping();
+        }catch(e){}
+      };
+      ws.onclose = function(){ if(hbTimer) clearInterval(hbTimer); realtimeCh=null; };
+      realtimeCh = ws;
+    }catch(e){}
   }
 
   function openWidget(){

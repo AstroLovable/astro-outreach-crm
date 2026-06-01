@@ -129,6 +129,7 @@ export type Database = {
           package: string | null
           phone: string | null
           service_type: string | null
+          source: string | null
           stage: string
           stage_changed_at: string
           status_note: string | null
@@ -148,6 +149,7 @@ export type Database = {
           package?: string | null
           phone?: string | null
           service_type?: string | null
+          source?: string | null
           stage?: string
           stage_changed_at?: string
           status_note?: string | null
@@ -167,6 +169,7 @@ export type Database = {
           package?: string | null
           phone?: string | null
           service_type?: string | null
+          source?: string | null
           stage?: string
           stage_changed_at?: string
           status_note?: string | null

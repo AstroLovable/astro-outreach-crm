@@ -226,6 +226,34 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
     const x = [...f.line_items]; x[i] = { ...x[i], ...patch }; setF({ ...f, line_items: x });
   };
 
+  const splitDeposit50 = async (parent: any) => {
+    if (!user || !settings) return;
+    try {
+      const halfItems = (parent.line_items || []).map((li: LineItem) => ({
+        description: li.description, qty: li.qty, unit_price: Number(li.unit_price) / 2,
+      }));
+      const sub = halfItems.reduce((s: number, li: LineItem) => s + li.qty * li.unit_price, 0);
+      const vatAmt = parent.vat ? sub * 0.2 : 0;
+      const total = sub + vatAmt;
+      const mk = async (part: "Deposit 50%" | "Balance 50%", suffix: string) => {
+        const number = `${settings.invoice_prefix}-${String(settings.next_invoice_number).padStart(4, "0")}${suffix}`;
+        const { error } = await supabase.from("invoices").insert({
+          owner_id: user.id, client_id: parent.client_id, number,
+          issue_date: new Date().toISOString().slice(0, 10),
+          line_items: halfItems, subtotal: sub, vat: parent.vat, vat_amount: vatAmt, total,
+          notes: `${part} of invoice ${parent.number}`, status: "Draft",
+          deposit_part: part, parent_invoice_id: parent.id,
+        });
+        if (error) throw error;
+        await supabase.from("settings").update({ next_invoice_number: settings.next_invoice_number + 1 }).eq("owner_id", user.id);
+      };
+      await mk("Deposit 50%", "-D");
+      await mk("Balance 50%", "-B");
+      toast.success("Split into deposit + balance invoices");
+      onSaved(); onOpenChange(false);
+    } catch (e: any) { toast.error(e.message); }
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
@@ -254,6 +282,27 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
             <div><Label>Due date</Label><Input type="date" value={f.due_date || ""} onChange={(e) => setF({ ...f, due_date: e.target.value })} /></div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Package</Label>
+              <Select value={f.package || ""} onValueChange={applyPackage}>
+                <SelectTrigger><SelectValue placeholder="Choose a package" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Launch">Launch — £299</SelectItem>
+                  <SelectItem value="Standard">Standard — £399</SelectItem>
+                  <SelectItem value="Pro">Pro — £699</SelectItem>
+                  <SelectItem value="Custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {kind === "invoice" && (
+              <div>
+                <Label>Job reference</Label>
+                <Input value={f.job_reference || ""} onChange={(e) => setF({ ...f, job_reference: e.target.value })} placeholder="Optional" />
+              </div>
+            )}
+          </div>
+
           <div>
             <Label>Line items</Label>
             <div className="space-y-2 mt-1">
@@ -280,7 +329,10 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
 
           <div><Label>Notes</Label><Textarea rows={3} value={f.notes || ""} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
         </div>
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex justify-end gap-2 flex-wrap">
+          {kind === "invoice" && editing && (
+            <Button variant="outline" onClick={() => splitDeposit50(editing)}>Split 50/50 deposit</Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save}>Save</Button>
         </div>
