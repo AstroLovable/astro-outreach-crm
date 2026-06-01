@@ -132,6 +132,8 @@ export function Dashboard() {
         </Card>
       </div>
 
+      <FollowUpsCard />
+
       <LiveChatsCard />
 
       <Card className="card-surface p-5 mt-6 flex items-center justify-between">
