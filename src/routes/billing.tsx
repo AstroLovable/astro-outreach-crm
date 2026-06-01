@@ -254,6 +254,27 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
             <div><Label>Due date</Label><Input type="date" value={f.due_date || ""} onChange={(e) => setF({ ...f, due_date: e.target.value })} /></div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Package</Label>
+              <Select value={f.package || ""} onValueChange={applyPackage}>
+                <SelectTrigger><SelectValue placeholder="Choose a package" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Launch">Launch — £299</SelectItem>
+                  <SelectItem value="Standard">Standard — £399</SelectItem>
+                  <SelectItem value="Pro">Pro — £699</SelectItem>
+                  <SelectItem value="Custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {kind === "invoice" && (
+              <div>
+                <Label>Job reference</Label>
+                <Input value={f.job_reference || ""} onChange={(e) => setF({ ...f, job_reference: e.target.value })} placeholder="Optional" />
+              </div>
+            )}
+          </div>
+
           <div>
             <Label>Line items</Label>
             <div className="space-y-2 mt-1">
