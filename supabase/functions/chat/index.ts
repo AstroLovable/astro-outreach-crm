@@ -1,6 +1,6 @@
 // Public chat edge function — Groq AI, polling, client data extraction,
-// AI-initiated handover, contact form intake, office hours, and per-session
-// system prompt snapshot.
+// AI-initiated handover, contact form intake, office hours, request-contact,
+// idle auto-close, and per-session system prompt snapshot.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const CORS = {
@@ -14,11 +14,12 @@ const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.3-70b-versatile";
 const HANDOVER_TOKEN = "HANDOVER_REQUESTED";
 const CONTACT_TOKEN = "SHOW_CONTACT_FORM";
+const SHOW_CONTACT_CTRL = "__SHOW_CONTACT_FORM__";
 
 const DEFAULT_PROMPT =
   `You are a helpful customer support assistant for AstroLabs & Co. Answer briefly and warmly. ` +
-  `If the visitor asks for a quote or wants to speak to a human, include the exact token ${CONTACT_TOKEN} in your response. ` +
-  `If you cannot help, include the exact token ${HANDOVER_TOKEN} and a human teammate will take over.`;
+  `If the visitor asks for a quote, leaves contact details, or seems ready to commit, include the exact token ${CONTACT_TOKEN} in your response. ` +
+  `If you cannot help or the visitor explicitly asks for a human, include the exact token ${HANDOVER_TOKEN} — a human teammate will be notified by email and take over.`;
 
 async function callGroq(
   systemPrompt: string,
@@ -68,6 +69,38 @@ function isWithinOfficeHours(settings: {
   } catch { return true; }
 }
 
+async function upsertLeadFromContact(
+  db: ReturnType<typeof createClient>,
+  ownerId: string,
+  sessionId: string,
+  c: { name?: string|null; business?: string|null; business_type?: string|null; email?: string|null; phone?: string|null },
+) {
+  let existing: { id: string } | null = null;
+  if (c.email) {
+    const { data } = await db.from("clients").select("id")
+      .eq("owner_id", ownerId).ilike("email", c.email).maybeSingle();
+    existing = data as { id: string } | null;
+  }
+  const patch: Record<string, unknown> = {
+    name: c.name || c.email || "New lead",
+    business: c.business || null, service_type: c.business_type || null,
+    email: c.email || null, phone: c.phone || null,
+    source: "chat",
+  };
+  if (existing) {
+    await db.from("clients").update(patch).eq("id", existing.id);
+  } else {
+    await db.from("clients").insert({
+      owner_id: ownerId, ...patch, stage: "Lead",
+      notes: `Submitted via chat widget (session ${sessionId})`,
+    });
+  }
+  await db.from("activity").insert({
+    owner_id: ownerId, type: "chat",
+    description: `Contact form submitted: ${c.name || c.email || "anonymous"}`,
+  });
+}
+
 async function extractClientData(
   db: ReturnType<typeof createClient>,
   sessionId: string,
@@ -96,35 +129,7 @@ async function extractClientData(
       business: business ?? sess.business,
     }).eq("id", sessionId);
 
-    let existing: { id: string } | null = null;
-    if (email) {
-      const { data } = await db.from("clients").select("id")
-        .eq("owner_id", sess.owner_id).ilike("email", email).maybeSingle();
-      existing = data as { id: string } | null;
-    }
-    if (!existing && name) {
-      const { data } = await db.from("clients").select("id")
-        .eq("owner_id", sess.owner_id).ilike("name", name).maybeSingle();
-      existing = data as { id: string } | null;
-    }
-    const patch: Record<string, unknown> = {};
-    if (name) patch.name = name;
-    if (business) patch.business = business;
-    if (business_type) patch.service_type = business_type;
-    if (email) patch.email = email;
-    if (phone) patch.phone = phone;
-
-    if (existing) {
-      await db.from("clients").update(patch).eq("id", existing.id);
-    } else {
-      await db.from("clients").insert({
-        owner_id: sess.owner_id,
-        name: name ?? business ?? email ?? "Unnamed lead",
-        business: business ?? null, service_type: business_type ?? null,
-        email: email ?? null, phone: phone ?? null,
-        stage: "Lead", notes: `Auto-created from chat session ${sessionId}`,
-      });
-    }
+    await upsertLeadFromContact(db, sess.owner_id as string, sessionId, { name, business, business_type, email, phone });
   } catch (e) { console.error("[extractClientData]", e); }
 }
 
@@ -166,6 +171,15 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: CORS });
     }
 
+    // ── CRM requests contact form push ───────────────────
+    if (body.action === "request-contact" && body.sessionId) {
+      // Insert a control message the widget recognises and hides from UI.
+      await db.from("chat_messages").insert({
+        session_id: body.sessionId, role: "assistant", content: SHOW_CONTACT_CTRL,
+      });
+      return new Response(JSON.stringify({ ok: true }), { headers: CORS });
+    }
+
     // ── Contact form submit ──────────────────────────────
     if (body.action === "contact" && body.sessionId) {
       const { name, business, business_type, email, phone } = body.contact || {};
@@ -177,30 +191,7 @@ Deno.serve(async (req) => {
           visitor_email: email || sess.visitor_email,
           business: business || sess.business,
         }).eq("id", body.sessionId);
-
-        let existing: { id: string } | null = null;
-        if (email) {
-          const { data } = await db.from("clients").select("id")
-            .eq("owner_id", sess.owner_id).ilike("email", email).maybeSingle();
-          existing = data as { id: string } | null;
-        }
-        const patch: Record<string, unknown> = {
-          name: name || email || "New lead",
-          business: business || null, service_type: business_type || null,
-          email: email || null, phone: phone || null,
-        };
-        if (existing) {
-          await db.from("clients").update(patch).eq("id", existing.id);
-        } else {
-          await db.from("clients").insert({
-            owner_id: sess.owner_id, ...patch, stage: "Lead",
-            notes: `Submitted via chat widget contact form (session ${body.sessionId})`,
-          });
-        }
-        await db.from("activity").insert({
-          owner_id: sess.owner_id, type: "chat",
-          description: `Contact form submitted: ${name || email || "anonymous"}`,
-        });
+        await upsertLeadFromContact(db, sess.owner_id as string, body.sessionId, { name, business, business_type, email, phone });
       }
       return new Response(JSON.stringify({ ok: true }), { headers: CORS });
     }
@@ -214,11 +205,10 @@ Deno.serve(async (req) => {
         .select("owner_id, chatbot_system_prompt, office_hours_start, office_hours_end, office_days, office_timezone")
         .limit(1).maybeSingle();
       const snapshot = (ownerRow?.chatbot_system_prompt as string | undefined)?.trim() || DEFAULT_PROMPT;
-      // Append office-hours rule
       const finalPrompt = ownerRow
-        ? `${snapshot}\n\nIMPORTANT: If outside office hours (currently ${
+        ? `${snapshot}\n\nIMPORTANT: Office hours are currently ${
             isWithinOfficeHours(ownerRow as any) ? "OPEN" : "CLOSED"
-          }), tell the visitor the team is unavailable and include ${CONTACT_TOKEN} in your reply.`
+          }. If CLOSED, tell the visitor the team is offline and include ${CONTACT_TOKEN} in your reply.`
         : snapshot;
 
       const { data, error } = await db.from("chat_sessions").insert({
@@ -243,8 +233,6 @@ Deno.serve(async (req) => {
       await db.from("chat_messages").insert({
         session_id: sessionId, role: "visitor", content: body.message.slice(0, 2000),
       });
-      // Bump unread for owner
-      await db.rpc; // no-op placeholder; direct update below
       const { data: cur } = await db.from("chat_sessions").select("unread_count").eq("id", sessionId).maybeSingle();
       await db.from("chat_sessions").update({
         unread_count: ((cur?.unread_count as number) ?? 0) + 1,
@@ -261,9 +249,11 @@ Deno.serve(async (req) => {
       const { data: history } = await db.from("chat_messages")
         .select("role, content").eq("session_id", sessionId!)
         .order("created_at", { ascending: true }).limit(20);
-      const aiMessages = (history ?? []).map((m: { role: string; content: string }) => ({
-        role: m.role === "visitor" ? "user" : "assistant", content: m.content,
-      }));
+      const aiMessages = (history ?? [])
+        .filter((m: { content: string }) => m.content !== SHOW_CONTACT_CTRL)
+        .map((m: { role: string; content: string }) => ({
+          role: m.role === "visitor" ? "user" : "assistant", content: m.content,
+        }));
       let rawReply = await callGroq(sessionRow.system_prompt || DEFAULT_PROMPT, aiMessages);
 
       if (rawReply.includes(HANDOVER_TOKEN)) {
