@@ -292,8 +292,13 @@ function ChatPanel({ sessionId, onDeleted }: { sessionId: string; onDeleted: () 
           </div>
           <div className="text-xs text-muted-foreground truncate">{session.data?.page_url || "—"}</div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <AiActiveToggle on={aiActive} disabled={isClosed} onChange={toggleAi} />
+          {!isClosed && (
+            <Button size="sm" variant="outline" onClick={sendContactForm}>
+              <ClipboardList className="h-4 w-4 mr-1" />Send Contact Form
+            </Button>
+          )}
           {!isClosed && (
             <Button size="sm" variant="ghost" onClick={() => close.mutate()}>
               <X className="h-4 w-4 mr-1" />Close
