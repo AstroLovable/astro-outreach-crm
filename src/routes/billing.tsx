@@ -301,7 +301,10 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
 
           <div><Label>Notes</Label><Textarea rows={3} value={f.notes || ""} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
         </div>
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex justify-end gap-2 flex-wrap">
+          {kind === "invoice" && editing && (
+            <Button variant="outline" onClick={() => splitDeposit50(editing)}>Split 50/50 deposit</Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save}>Save</Button>
         </div>
