@@ -364,7 +364,7 @@ function ChatPanel({ sessionId, onDeleted }: { sessionId: string; onDeleted: () 
           </div>
         ) : (
           <>
-            <Textarea rows={3} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Type a reply…" />
+            <Textarea rows={3} value={reply} onChange={(e) => { setReply(e.target.value); broadcastTyping(); }} placeholder="Type a reply…" />
             <div className="flex justify-between">
               <Button size="sm" variant="outline" disabled={busy} onClick={aiDraft}>
                 <Sparkles className="h-4 w-4 mr-1" />{busy ? "…" : "AI draft"}
