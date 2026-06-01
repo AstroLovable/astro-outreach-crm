@@ -86,24 +86,32 @@ function SettingsView() {
         <Button variant="outline" size="sm" onClick={() => setForm({ ...form, services: [...form.services, { name: "New", price: 0 }] })}>Add service</Button>
       </Card>
 
-      <Card className="card-surface p-6 space-y-4">
+      <Card className="card-surface p-6 space-y-5">
         <h2 className="font-semibold">Chatbot</h2>
-        <div><Label>System prompt</Label><Textarea rows={4} value={form.chatbot_system_prompt} onChange={(e) => setForm({ ...form, chatbot_system_prompt: e.target.value })} /></div>
-        <div className="grid sm:grid-cols-3 gap-4">
-          <div>
+        <div className="space-y-2">
+          <Label>System prompt</Label>
+          <Textarea rows={4} value={form.chatbot_system_prompt} onChange={(e) => setForm({ ...form, chatbot_system_prompt: e.target.value })} />
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
             <Label>Pre-chat greeting delay (seconds)</Label>
             <Input type="number" value={form.greeting_delay_seconds} onChange={(e) => setForm({ ...form, greeting_delay_seconds: e.target.value })} />
           </div>
-          <div>
+          <div className="space-y-2">
             <Label>Auto-close idle chats after (hours)</Label>
             <Input type="number" value={form.idle_close_hours} onChange={(e) => setForm({ ...form, idle_close_hours: e.target.value })} />
           </div>
-          <div className="flex items-end gap-3">
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t">
+          <div className="flex items-center justify-between gap-3">
+            <Label className="font-normal">Play sound on new chat</Label>
             <Switch checked={form.notification_sound} onCheckedChange={(v) => setForm({ ...form, notification_sound: v })} />
-            <Label>Play sound on new chat</Label>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <Label className="font-normal">Email me on human-handoff requests</Label>
+            <Switch checked={form.notify_new_chat} onCheckedChange={(v) => setForm({ ...form, notify_new_chat: v })} />
           </div>
         </div>
-        <div className="flex items-center gap-3"><Switch checked={form.notify_new_chat} onCheckedChange={(v) => setForm({ ...form, notify_new_chat: v })} /><Label>Email me on new human-handoff requests</Label></div>
       </Card>
 
       <Card className="card-surface p-6 space-y-4">
