@@ -1,6 +1,13 @@
 // Public chat edge function — Groq AI, polling, client data extraction,
 // AI-initiated handover, contact form intake, office hours, request-contact,
 // idle auto-close, and per-session system prompt snapshot.
+//
+// Security:
+// - Visitor actions (send / poll / close / contact) require visitor_secret
+//   returned from session creation, preventing IDOR by knowledge of UUID.
+// - request-contact (CRM-initiated) requires a valid owner JWT.
+// - Best-effort in-memory per-IP rate limiting on session-creating and
+//   message-sending actions to slow abuse / Groq cost amplification.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const CORS = {
@@ -20,6 +27,34 @@ const DEFAULT_PROMPT =
   `You are a helpful customer support assistant for AstroLabs & Co. Answer briefly and warmly. ` +
   `If the visitor asks for a quote, leaves contact details, or seems ready to commit, include the exact token ${CONTACT_TOKEN} in your response. ` +
   `If you cannot help or the visitor explicitly asks for a human, include the exact token ${HANDOVER_TOKEN} — a human teammate will be notified by email and take over.`;
+
+// ── Rate limiting (best-effort, per-isolate in-memory) ────────
+const RL_WINDOW_MS = 60_000;
+const RL_MAX_PER_MIN = 15;
+const RL_MAX_NEW_SESSIONS_PER_HOUR = 10;
+const rlMap = new Map<string, number[]>();
+const sessionMap = new Map<string, number[]>();
+
+function getIp(req: Request): string {
+  return (
+    req.headers.get("cf-connecting-ip") ||
+    req.headers.get("x-real-ip") ||
+    (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
+    "unknown"
+  );
+}
+function rateLimit(map: Map<string, number[]>, key: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  const arr = (map.get(key) || []).filter((t) => now - t < windowMs);
+  if (arr.length >= max) { map.set(key, arr); return false; }
+  arr.push(now); map.set(key, arr); return true;
+}
+
+function randomSecret(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 async function callGroq(
   systemPrompt: string,
@@ -143,16 +178,60 @@ async function triggerHandover(url: string, serviceKey: string, sessionId: strin
   } catch (e) { console.error("[triggerHandover]", e); }
 }
 
+// Verify caller has a valid visitor_secret for the given session.
+async function verifyVisitor(
+  db: ReturnType<typeof createClient>,
+  sessionId: string,
+  secret: string | undefined | null,
+): Promise<boolean> {
+  if (!secret || typeof secret !== "string") return false;
+  const { data } = await db.from("chat_sessions")
+    .select("visitor_secret").eq("id", sessionId).maybeSingle();
+  const stored = (data as { visitor_secret?: string } | null)?.visitor_secret;
+  return !!stored && stored === secret;
+}
+
+// Verify caller is an authenticated owner of the given session.
+async function verifyOwner(
+  req: Request,
+  url: string,
+  anonKey: string,
+  sessionId: string,
+): Promise<boolean> {
+  const auth = req.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return false;
+  try {
+    const userClient = createClient(url, anonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: u } = await userClient.auth.getUser(token);
+    const uid = u?.user?.id;
+    if (!uid) return false;
+    const { data: sess } = await userClient.from("chat_sessions")
+      .select("owner_id").eq("id", sessionId).maybeSingle();
+    return !!sess && (sess as { owner_id?: string }).owner_id === uid;
+  } catch { return false; }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   try {
+    const ip = getIp(req);
     const body = await req.json();
     const url = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
     const db = createClient(url, serviceKey);
+
+    const visitorSecret: string | undefined = body.visitorSecret;
 
     // ── Poll ─────────────────────────────────────────────
     if (body.action === "poll" && body.sessionId) {
+      if (!(await verifyVisitor(db, body.sessionId, visitorSecret))) {
+        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: CORS });
+      }
       const since = typeof body.since === "string" ? body.since : "1970-01-01T00:00:00Z";
       const { data: messages } = await db.from("chat_messages")
         .select("id, role, content, created_at").eq("session_id", body.sessionId)
@@ -165,6 +244,9 @@ Deno.serve(async (req) => {
 
     // ── Close ────────────────────────────────────────────
     if (body.action === "close" && body.sessionId) {
+      if (!(await verifyVisitor(db, body.sessionId, visitorSecret))) {
+        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: CORS });
+      }
       await db.from("chat_sessions")
         .update({ status: "closed", updated_at: new Date().toISOString() })
         .eq("id", body.sessionId);
@@ -173,7 +255,9 @@ Deno.serve(async (req) => {
 
     // ── CRM requests contact form push ───────────────────
     if (body.action === "request-contact" && body.sessionId) {
-      // Insert a control message the widget recognises and hides from UI.
+      if (!(await verifyOwner(req, url, anonKey, body.sessionId))) {
+        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: CORS });
+      }
       await db.from("chat_messages").insert({
         session_id: body.sessionId, role: "assistant", content: SHOW_CONTACT_CTRL,
       });
@@ -182,6 +266,9 @@ Deno.serve(async (req) => {
 
     // ── Contact form submit ──────────────────────────────
     if (body.action === "contact" && body.sessionId) {
+      if (!(await verifyVisitor(db, body.sessionId, visitorSecret))) {
+        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: CORS });
+      }
       const { name, business, business_type, email, phone } = body.contact || {};
       const { data: sess } = await db.from("chat_sessions")
         .select("owner_id, visitor_name, visitor_email, business").eq("id", body.sessionId).maybeSingle();
@@ -197,10 +284,19 @@ Deno.serve(async (req) => {
     }
 
     // ── Widget chat ──────────────────────────────────────
+    // Per-IP rate limit for message/send and session creation
+    if (!rateLimit(rlMap, ip, RL_MAX_PER_MIN, RL_WINDOW_MS)) {
+      return new Response(JSON.stringify({ error: "rate_limited" }), { status: 429, headers: CORS });
+    }
+
     let sessionId: string | null = body.sessionId ?? null;
+    let issuedSecret: string | null = null;
     let sessionRow: { status: string; system_prompt: string | null; owner_id: string | null } | null = null;
 
     if (!sessionId) {
+      if (!rateLimit(sessionMap, ip, RL_MAX_NEW_SESSIONS_PER_HOUR, 60 * 60 * 1000)) {
+        return new Response(JSON.stringify({ error: "rate_limited" }), { status: 429, headers: CORS });
+      }
       const { data: ownerRow } = await db.from("settings")
         .select("owner_id, chatbot_system_prompt, office_hours_start, office_hours_end, office_days, office_timezone")
         .limit(1).maybeSingle();
@@ -211,15 +307,20 @@ Deno.serve(async (req) => {
           }. If CLOSED, tell the visitor the team is offline and include ${CONTACT_TOKEN} in your reply.`
         : snapshot;
 
+      issuedSecret = randomSecret();
       const { data, error } = await db.from("chat_sessions").insert({
         page_url: body.pageUrl ?? null, status: "ai_handling",
         owner_id: (ownerRow as any)?.owner_id ?? null,
         system_prompt: finalPrompt,
+        visitor_secret: issuedSecret,
       }).select("id, status, system_prompt, owner_id").single();
       if (error) throw error;
       sessionId = data.id;
       sessionRow = data as any;
     } else {
+      if (!(await verifyVisitor(db, sessionId, visitorSecret))) {
+        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: CORS });
+      }
       const { data } = await db.from("chat_sessions")
         .select("status, system_prompt, owner_id").eq("id", sessionId).maybeSingle();
       sessionRow = data as any;
@@ -284,7 +385,7 @@ Deno.serve(async (req) => {
       extractClientData(db, sessionId!, transcript).catch((e) => console.error(e));
     }
 
-    return new Response(JSON.stringify({ sessionId, reply, replyId, handover, showContact }), { headers: CORS });
+    return new Response(JSON.stringify({ sessionId, visitorSecret: issuedSecret, reply, replyId, handover, showContact }), { headers: CORS });
   } catch (err) {
     console.error("[chat]", err);
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }), { status: 500, headers: CORS });

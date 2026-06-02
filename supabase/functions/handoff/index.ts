@@ -40,13 +40,22 @@ Deno.serve(async (req) => {
         .join("\n");
     }
 
+    const esc = (s: unknown) =>
+      String(s ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const safeUrl = (u: unknown) => {
+      const s = String(u ?? "");
+      return /^https?:\/\//i.test(s) ? esc(s) : "";
+    };
+    const pageHref = safeUrl(pageUrl);
     const html = `
       <h2>Chat Handoff Requested</h2>
-      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
-      <p><strong>Page:</strong> ${pageUrl ?? "—"}</p>
-      <p><strong>Session ID:</strong> ${sessionId}</p>
+      ${reason ? `<p><strong>Reason:</strong> ${esc(reason)}</p>` : ""}
+      <p><strong>Page:</strong> ${pageHref ? `<a href="${pageHref}">${pageHref}</a>` : "—"}</p>
+      <p><strong>Session ID:</strong> ${esc(sessionId)}</p>
       <h3>Transcript</h3>
-      <pre style="white-space:pre-wrap;font-family:system-ui;background:#f5f5f5;padding:12px;border-radius:6px">${transcriptText.replace(/</g, "&lt;")}</pre>
+      <pre style="white-space:pre-wrap;font-family:system-ui;background:#f5f5f5;padding:12px;border-radius:6px">${esc(transcriptText)}</pre>
     `;
 
     // Call send-email function

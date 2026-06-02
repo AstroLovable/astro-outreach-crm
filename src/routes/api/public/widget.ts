@@ -12,7 +12,12 @@ const JS = `(function(){
   var GREETING_DELAY = parseInt((s && s.dataset.greetingDelay) || "60", 10) * 1000;
   var SUPA = ${JSON.stringify(SUPA_URL)};
   var KEY = ${JSON.stringify(SUPA_ANON)};
-  var sessionId = null;
+  var STORAGE_KEY = 'alc_chat_session_v1';
+  var stored = {};
+  try { stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '{}') || {}; } catch(e) {}
+  var sessionId = stored.sessionId || null;
+  var visitorSecret = stored.secret || null;
+  function saveSession(){ try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionId: sessionId, secret: visitorSecret })); } catch(e) {} }
   var locked = false;
 
   var css = '.alc-btn{position:fixed;bottom:20px;right:20px;background:'+COLOR_DARK+';color:#fff;border:none;border-radius:999px;padding:14px 18px;font:600 14px system-ui;box-shadow:0 8px 24px rgba(46,58,89,.25);cursor:pointer;z-index:2147483646}'+
@@ -74,10 +79,12 @@ const JS = `(function(){
   }
   function hideTyping(){ if(typingEl){ typingEl.remove(); typingEl=null; } }
   function callFn(name, payload){
+    var p = payload || {};
+    if(sessionId && visitorSecret && !p.visitorSecret) p.visitorSecret = visitorSecret;
     return fetch(SUPA+'/functions/v1/'+name,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+KEY,'apikey':KEY},
-      body:JSON.stringify(payload||{})
+      body:JSON.stringify(p)
     }).then(function(r){return r.json()});
   }
   function lock(msg){
@@ -210,9 +217,13 @@ const JS = `(function(){
         if(r.error === 'closed'){ lock('This chat has ended.'); return; }
         if(r.sessionId) {
           sessionId = r.sessionId;
+          if(r.visitorSecret) visitorSecret = r.visitorSecret;
+          saveSession();
           if(!pollTimer) pollTimer = setInterval(poll, 3000);
           subscribeTyping();
         }
+        if(r.error === 'rate_limited'){ add('bot', '⚠ Too many messages. Please wait a moment.'); return; }
+        if(r.error === 'forbidden'){ lock('This chat session is no longer available.'); return; }
         if(r.replyId) seenIds[r.replyId] = 1;
         if(r.reply) add('bot', r.reply);
         if(r.showContact) showContactForm("Let's get your details — we'll reply with a quote.");
