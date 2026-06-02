@@ -86,6 +86,7 @@ export type Database = {
           updated_at: string
           visitor_email: string | null
           visitor_name: string | null
+          visitor_secret: string | null
         }
         Insert: {
           business?: string | null
@@ -99,6 +100,7 @@ export type Database = {
           updated_at?: string
           visitor_email?: string | null
           visitor_name?: string | null
+          visitor_secret?: string | null
         }
         Update: {
           business?: string | null
@@ -112,6 +114,7 @@ export type Database = {
           updated_at?: string
           visitor_email?: string | null
           visitor_name?: string | null
+          visitor_secret?: string | null
         }
         Relationships: []
       }
