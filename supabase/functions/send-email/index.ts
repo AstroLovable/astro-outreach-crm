@@ -1,4 +1,5 @@
 // Generic email sender via Brevo. Accepts { to, from, subject, body }.
+// Requires Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY> — internal callers only.
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -10,13 +11,31 @@ const FROM_NAMES: Record<string, string> = {
   "invoices@astrolabs.uk": "AstroLabs Billing",
   "hello@astrolabs.uk": "AstroLabs & Co.",
 };
+const ALLOWED_FROM = new Set(Object.keys(FROM_NAMES));
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+
+  // Require internal service-role authentication
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const authHeader = req.headers.get("authorization") || "";
+  const token = authHeader.toLowerCase().startsWith("bearer ")
+    ? authHeader.slice(7).trim()
+    : "";
+  if (!serviceKey || !token || token !== serviceKey) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: CORS });
+  }
+
   try {
     const { to, from, subject, body } = await req.json();
     if (!to || !from || !subject || !body) {
       return new Response(JSON.stringify({ error: "to, from, subject, body required" }), {
+        status: 400,
+        headers: CORS,
+      });
+    }
+    if (!ALLOWED_FROM.has(from)) {
+      return new Response(JSON.stringify({ error: "from address not allowed" }), {
         status: 400,
         headers: CORS,
       });

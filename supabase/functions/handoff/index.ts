@@ -11,11 +11,22 @@ const CORS = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
+  // Require internal service-role authentication
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const authHeader = req.headers.get("authorization") || "";
+  const token = authHeader.toLowerCase().startsWith("bearer ")
+    ? authHeader.slice(7).trim()
+    : "";
+  if (!serviceKey || !token || token !== serviceKey) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: CORS });
+  }
+
   try {
     const { sessionId, pageUrl, transcript, reason } = await req.json();
     if (!sessionId) {
       return new Response(JSON.stringify({ error: "sessionId required" }), { status: 400, headers: CORS });
     }
+
 
     const url = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

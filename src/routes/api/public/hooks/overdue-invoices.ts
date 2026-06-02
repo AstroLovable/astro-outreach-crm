@@ -4,8 +4,18 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 export const Route = createFileRoute("/api/public/hooks/overdue-invoices")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const auth = request.headers.get("authorization") || "";
+        const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+        if (!serviceKey || token !== serviceKey) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
         const today = new Date().toISOString().slice(0, 10);
+
         const { data: overdue } = await supabaseAdmin
           .from("invoices")
           .select("id, number, total, due_date, client_id, owner_id, status")

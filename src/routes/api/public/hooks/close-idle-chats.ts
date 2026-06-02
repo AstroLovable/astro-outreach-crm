@@ -4,9 +4,19 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 export const Route = createFileRoute("/api/public/hooks/close-idle-chats")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const auth = request.headers.get("authorization") || "";
+        const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+        if (!serviceKey || token !== serviceKey) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
         const { data: settings } = await supabaseAdmin
           .from("settings").select("idle_close_hours").limit(1).maybeSingle();
+
         const hours = (settings?.idle_close_hours as number) || 24;
         const cutoff = new Date(Date.now() - hours * 3600 * 1000).toISOString();
         const { data: sessions } = await supabaseAdmin
