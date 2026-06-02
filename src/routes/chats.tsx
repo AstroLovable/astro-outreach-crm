@@ -261,9 +261,11 @@ function ChatPanel({ sessionId, onDeleted }: { sessionId: string; onDeleted: () 
     try {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
       const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token || key;
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, apikey: key },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, apikey: key },
         body: JSON.stringify({ action: "request-contact", sessionId }),
       });
       if (!res.ok) throw new Error(await res.text());
