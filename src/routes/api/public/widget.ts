@@ -217,9 +217,13 @@ const JS = `(function(){
         if(r.error === 'closed'){ lock('This chat has ended.'); return; }
         if(r.sessionId) {
           sessionId = r.sessionId;
+          if(r.visitorSecret) visitorSecret = r.visitorSecret;
+          saveSession();
           if(!pollTimer) pollTimer = setInterval(poll, 3000);
           subscribeTyping();
         }
+        if(r.error === 'rate_limited'){ add('bot', '⚠ Too many messages. Please wait a moment.'); return; }
+        if(r.error === 'forbidden'){ lock('This chat session is no longer available.'); return; }
         if(r.replyId) seenIds[r.replyId] = 1;
         if(r.reply) add('bot', r.reply);
         if(r.showContact) showContactForm("Let's get your details — we'll reply with a quote.");
