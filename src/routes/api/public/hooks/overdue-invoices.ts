@@ -5,9 +5,10 @@ export const Route = createFileRoute("/api/public/hooks/overdue-invoices")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const cronSecret = process.env.CRON_SECRET;
         const auth = request.headers.get("authorization") || "";
         const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+        const { data: secretRow } = await supabaseAdmin.rpc("get_cron_secret");
+        const cronSecret = typeof secretRow === "string" ? secretRow : (secretRow as { get_cron_secret?: string } | null)?.get_cron_secret;
         if (!cronSecret || token !== cronSecret) {
           return new Response(JSON.stringify({ error: "Unauthorized" }), {
             status: 401,
