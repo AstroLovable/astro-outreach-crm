@@ -5,10 +5,10 @@ export const Route = createFileRoute("/api/public/hooks/close-idle-chats")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const cronSecret = process.env.CRON_SECRET;
         const auth = request.headers.get("authorization") || "";
         const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
-        if (!serviceKey || token !== serviceKey) {
+        if (!cronSecret || token !== cronSecret) {
           return new Response(JSON.stringify({ error: "Unauthorized" }), {
             status: 401,
             headers: { "Content-Type": "application/json" },

@@ -5,15 +5,16 @@ export const Route = createFileRoute("/api/public/hooks/overdue-invoices")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const cronSecret = process.env.CRON_SECRET;
         const auth = request.headers.get("authorization") || "";
         const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
-        if (!serviceKey || token !== serviceKey) {
+        if (!cronSecret || token !== cronSecret) {
           return new Response(JSON.stringify({ error: "Unauthorized" }), {
             status: 401,
             headers: { "Content-Type": "application/json" },
           });
         }
+        const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
         const today = new Date().toISOString().slice(0, 10);
 
         const { data: overdue } = await supabaseAdmin
@@ -26,8 +27,8 @@ export const Route = createFileRoute("/api/public/hooks/overdue-invoices")({
           const { data: client } = await supabaseAdmin
             .from("clients").select("name, email").eq("id", inv.client_id as string).maybeSingle();
           const body = `<h2>Overdue invoice</h2>
-            <p><strong>${client?.name || "Client"}</strong></p>
-            <p>Invoice: ${inv.number}<br/>Amount: £${inv.total}<br/>Due: ${inv.due_date}</p>`;
+            <p><strong>${esc(client?.name) || "Client"}</strong></p>
+            <p>Invoice: ${esc(inv.number)}<br/>Amount: £${esc(inv.total)}<br/>Due: ${esc(inv.due_date)}</p>`;
           await fetch(`${process.env.SUPABASE_URL}/functions/v1/send-email`, {
             method: "POST",
             headers: {

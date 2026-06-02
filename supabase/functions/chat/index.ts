@@ -388,6 +388,6 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ sessionId, visitorSecret: issuedSecret, reply, replyId, handover, showContact }), { headers: CORS });
   } catch (err) {
     console.error("[chat]", err);
-    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }), { status: 500, headers: CORS });
+    return new Response(JSON.stringify({ error: "Internal error" }), { status: 500, headers: CORS });
   }
 });
