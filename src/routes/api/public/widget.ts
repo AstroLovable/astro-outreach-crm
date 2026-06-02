@@ -12,7 +12,12 @@ const JS = `(function(){
   var GREETING_DELAY = parseInt((s && s.dataset.greetingDelay) || "60", 10) * 1000;
   var SUPA = ${JSON.stringify(SUPA_URL)};
   var KEY = ${JSON.stringify(SUPA_ANON)};
-  var sessionId = null;
+  var STORAGE_KEY = 'alc_chat_session_v1';
+  var stored = {};
+  try { stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '{}') || {}; } catch(e) {}
+  var sessionId = stored.sessionId || null;
+  var visitorSecret = stored.secret || null;
+  function saveSession(){ try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionId: sessionId, secret: visitorSecret })); } catch(e) {} }
   var locked = false;
 
   var css = '.alc-btn{position:fixed;bottom:20px;right:20px;background:'+COLOR_DARK+';color:#fff;border:none;border-radius:999px;padding:14px 18px;font:600 14px system-ui;box-shadow:0 8px 24px rgba(46,58,89,.25);cursor:pointer;z-index:2147483646}'+
