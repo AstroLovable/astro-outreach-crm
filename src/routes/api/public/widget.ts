@@ -79,10 +79,12 @@ const JS = `(function(){
   }
   function hideTyping(){ if(typingEl){ typingEl.remove(); typingEl=null; } }
   function callFn(name, payload){
+    var p = payload || {};
+    if(sessionId && visitorSecret && !p.visitorSecret) p.visitorSecret = visitorSecret;
     return fetch(SUPA+'/functions/v1/'+name,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+KEY,'apikey':KEY},
-      body:JSON.stringify(payload||{})
+      body:JSON.stringify(p)
     }).then(function(r){return r.json()});
   }
   function lock(msg){
