@@ -1,6 +1,7 @@
 // Public chat edge function — Groq AI, polling, client data extraction,
 // AI-initiated handover, contact form intake, office hours, and per-session
-// system prompt snapshot.
+// system prompt snapshot. Visitor-scoped actions are gated by a per-session
+// visitor_secret minted at session creation.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const CORS = {
@@ -19,6 +20,28 @@ const DEFAULT_PROMPT =
   `You are a helpful customer support assistant for AstroLabs & Co. Answer briefly and warmly. ` +
   `If the visitor asks for a quote or wants to speak to a human, include the exact token ${CONTACT_TOKEN} in your response. ` +
   `If you cannot help, include the exact token ${HANDOVER_TOKEN} and a human teammate will take over.`;
+
+// Length-cap helper
+const CAP = (v: unknown, n: number) => (v == null ? null : String(v).slice(0, n));
+
+async function verifyVisitor(
+  db: ReturnType<typeof createClient>,
+  sessionId: string,
+  visitorSecret: unknown,
+): Promise<{ ok: boolean; row?: { status: string; system_prompt: string | null; owner_id: string | null; visitor_secret: string | null } }> {
+  if (!sessionId || typeof visitorSecret !== "string" || !visitorSecret) return { ok: false };
+  const { data } = await db
+    .from("chat_sessions")
+    .select("status, system_prompt, owner_id, visitor_secret")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (!data || data.visitor_secret !== visitorSecret) return { ok: false };
+  return { ok: true, row: data as any };
+}
+
+function forbidden() {
+  return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: CORS });
+}
 
 async function callGroq(
   systemPrompt: string,
@@ -82,7 +105,11 @@ async function extractClientData(
     );
     let parsed: Record<string, string | null> = {};
     try { parsed = JSON.parse(raw); } catch { return null; }
-    const { name, business, business_type, email, phone } = parsed;
+    const name = CAP(parsed.name, 200);
+    const business = CAP(parsed.business, 200);
+    const business_type = CAP(parsed.business_type, 100);
+    const email = CAP(parsed.email, 254);
+    const phone = CAP(parsed.phone, 30);
     if (!name && !email && !phone && !business) return null;
 
     const { data: sess } = await db
@@ -148,18 +175,20 @@ Deno.serve(async (req) => {
 
     // ── Poll ─────────────────────────────────────────────
     if (body.action === "poll" && body.sessionId) {
-      const since = typeof body.since === "string" ? body.since : "1970-01-01T00:00:00Z";
+      const v = await verifyVisitor(db, body.sessionId, body.visitorSecret);
+      if (!v.ok) return forbidden();
+      const since = typeof body.since === "string" ? body.since.slice(0, 64) : "1970-01-01T00:00:00Z";
       const { data: messages } = await db.from("chat_messages")
         .select("id, role, content, created_at").eq("session_id", body.sessionId)
         .in("role", ["assistant", "human"]).gt("created_at", since)
         .order("created_at", { ascending: true });
-      const { data: sess } = await db.from("chat_sessions")
-        .select("status").eq("id", body.sessionId).maybeSingle();
-      return new Response(JSON.stringify({ messages: messages ?? [], status: sess?.status ?? null }), { headers: CORS });
+      return new Response(JSON.stringify({ messages: messages ?? [], status: v.row?.status ?? null }), { headers: CORS });
     }
 
     // ── Close ────────────────────────────────────────────
     if (body.action === "close" && body.sessionId) {
+      const v = await verifyVisitor(db, body.sessionId, body.visitorSecret);
+      if (!v.ok) return forbidden();
       await db.from("chat_sessions")
         .update({ status: "closed", updated_at: new Date().toISOString() })
         .eq("id", body.sessionId);
@@ -168,7 +197,15 @@ Deno.serve(async (req) => {
 
     // ── Contact form submit ──────────────────────────────
     if (body.action === "contact" && body.sessionId) {
-      const { name, business, business_type, email, phone } = body.contact || {};
+      const v = await verifyVisitor(db, body.sessionId, body.visitorSecret);
+      if (!v.ok) return forbidden();
+      const c = body.contact || {};
+      const name = CAP(c.name, 200);
+      const business = CAP(c.business, 200);
+      const business_type = CAP(c.business_type, 100);
+      const email = CAP(c.email, 254);
+      const phone = CAP(c.phone, 30);
+
       const { data: sess } = await db.from("chat_sessions")
         .select("owner_id, visitor_name, visitor_email, business").eq("id", body.sessionId).maybeSingle();
       if (sess?.owner_id) {
@@ -206,45 +243,50 @@ Deno.serve(async (req) => {
     }
 
     // ── Widget chat ──────────────────────────────────────
+    const pageUrl = CAP(body.pageUrl, 2048);
     let sessionId: string | null = body.sessionId ?? null;
     let sessionRow: { status: string; system_prompt: string | null; owner_id: string | null } | null = null;
+    let visitorSecret: string | null = null;
+    let isNewSession = false;
 
     if (!sessionId) {
+      isNewSession = true;
       const { data: ownerRow } = await db.from("settings")
         .select("owner_id, chatbot_system_prompt, office_hours_start, office_hours_end, office_days, office_timezone")
         .limit(1).maybeSingle();
       const snapshot = (ownerRow?.chatbot_system_prompt as string | undefined)?.trim() || DEFAULT_PROMPT;
-      // Append office-hours rule
       const finalPrompt = ownerRow
         ? `${snapshot}\n\nIMPORTANT: If outside office hours (currently ${
             isWithinOfficeHours(ownerRow as any) ? "OPEN" : "CLOSED"
           }), tell the visitor the team is unavailable and include ${CONTACT_TOKEN} in your reply.`
         : snapshot;
 
+      visitorSecret = crypto.randomUUID();
+
       const { data, error } = await db.from("chat_sessions").insert({
-        page_url: body.pageUrl ?? null, status: "ai_handling",
+        page_url: pageUrl, status: "ai_handling",
         owner_id: (ownerRow as any)?.owner_id ?? null,
         system_prompt: finalPrompt,
+        visitor_secret: visitorSecret,
       }).select("id, status, system_prompt, owner_id").single();
       if (error) throw error;
       sessionId = data.id;
       sessionRow = data as any;
     } else {
-      const { data } = await db.from("chat_sessions")
-        .select("status, system_prompt, owner_id").eq("id", sessionId).maybeSingle();
-      sessionRow = data as any;
+      const v = await verifyVisitor(db, sessionId, body.visitorSecret);
+      if (!v.ok) return forbidden();
+      sessionRow = v.row as any;
     }
 
     if (sessionRow?.status === "closed") {
       return new Response(JSON.stringify({ sessionId, error: "closed", status: "closed" }), { headers: CORS });
     }
 
-    if (typeof body.message === "string" && body.message.trim()) {
+    const message = typeof body.message === "string" ? body.message.slice(0, 2000) : "";
+    if (message.trim()) {
       await db.from("chat_messages").insert({
-        session_id: sessionId, role: "visitor", content: body.message.slice(0, 2000),
+        session_id: sessionId, role: "visitor", content: message,
       });
-      // Bump unread for owner
-      await db.rpc; // no-op placeholder; direct update below
       const { data: cur } = await db.from("chat_sessions").select("unread_count").eq("id", sessionId).maybeSingle();
       await db.from("chat_sessions").update({
         unread_count: ((cur?.unread_count as number) ?? 0) + 1,
@@ -282,10 +324,10 @@ Deno.serve(async (req) => {
       }).select("id").single();
       replyId = inserted?.id ?? null;
 
-      if (handover) await triggerHandover(url, serviceKey, sessionId!, body.pageUrl ?? null);
+      if (handover) await triggerHandover(url, serviceKey, sessionId!, pageUrl);
     }
 
-    if (typeof body.message === "string" && body.message.trim()) {
+    if (message.trim()) {
       const { data: history2 } = await db.from("chat_messages")
         .select("role, content").eq("session_id", sessionId!)
         .order("created_at", { ascending: true }).limit(40);
@@ -294,7 +336,11 @@ Deno.serve(async (req) => {
       extractClientData(db, sessionId!, transcript).catch((e) => console.error(e));
     }
 
-    return new Response(JSON.stringify({ sessionId, reply, replyId, handover, showContact }), { headers: CORS });
+    // visitorSecret is returned ONLY on new-session creation
+    return new Response(JSON.stringify({
+      sessionId, reply, replyId, handover, showContact,
+      ...(isNewSession ? { visitorSecret } : {}),
+    }), { headers: CORS });
   } catch (err) {
     console.error("[chat]", err);
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }), { status: 500, headers: CORS });
