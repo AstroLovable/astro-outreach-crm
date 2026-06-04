@@ -170,10 +170,17 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
   const wasOpen = useRef(false);
 
   function initial() {
-    return editing || {
+    if (editing) {
+      return {
+        ...editing,
+        deposit_split: !!editing.deposit_part,
+        package: editing.package || "",
+      };
+    }
+    return {
       client_id: "", issue_date: new Date().toISOString().slice(0, 10),
       due_date: "", line_items: [{ description: "", qty: 1, unit_price: 0 }] as LineItem[],
-      vat: settings?.vat_enabled ?? true, notes: "", status: kind === "invoice" ? "Draft" : "Draft", number: editing?.number || "",
+      vat: settings?.vat_enabled ?? true, notes: "", status: kind === "invoice" ? "Draft" : "Draft", number: "",
       package: "", job_reference: "", deposit_split: false,
     };
   }
