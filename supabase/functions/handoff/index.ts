@@ -11,22 +11,11 @@ const CORS = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
-  // Require internal service-role authentication
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const authHeader = req.headers.get("authorization") || "";
-  const token = authHeader.toLowerCase().startsWith("bearer ")
-    ? authHeader.slice(7).trim()
-    : "";
-  if (!serviceKey || !token || token !== serviceKey) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: CORS });
-  }
-
   try {
     const { sessionId, pageUrl, transcript, reason } = await req.json();
     if (!sessionId) {
       return new Response(JSON.stringify({ error: "sessionId required" }), { status: 400, headers: CORS });
     }
-
 
     const url = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -51,22 +40,13 @@ Deno.serve(async (req) => {
         .join("\n");
     }
 
-    const esc = (s: unknown) =>
-      String(s ?? "")
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    const safeUrl = (u: unknown) => {
-      const s = String(u ?? "");
-      return /^https?:\/\//i.test(s) ? esc(s) : "";
-    };
-    const pageHref = safeUrl(pageUrl);
     const html = `
       <h2>Chat Handoff Requested</h2>
-      ${reason ? `<p><strong>Reason:</strong> ${esc(reason)}</p>` : ""}
-      <p><strong>Page:</strong> ${pageHref ? `<a href="${pageHref}">${pageHref}</a>` : "—"}</p>
-      <p><strong>Session ID:</strong> ${esc(sessionId)}</p>
+      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
+      <p><strong>Page:</strong> ${pageUrl ?? "—"}</p>
+      <p><strong>Session ID:</strong> ${sessionId}</p>
       <h3>Transcript</h3>
-      <pre style="white-space:pre-wrap;font-family:system-ui;background:#f5f5f5;padding:12px;border-radius:6px">${esc(transcriptText)}</pre>
+      <pre style="white-space:pre-wrap;font-family:system-ui;background:#f5f5f5;padding:12px;border-radius:6px">${transcriptText.replace(/</g, "&lt;")}</pre>
     `;
 
     // Call send-email function

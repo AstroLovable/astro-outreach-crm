@@ -1,18 +1,7 @@
 {
-  // This config deploys the built worker produced by `bun run build`.
-  // The build emits dist/server/{index.mjs, wrangler.json} and dist/client/ (static assets).
-  // Run `bun run build` first, then `npx wrangler deploy`.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "astro-outreach-crm",
   "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "dist/server/index.mjs",
-  "no_bundle": true,
-  "rules": [
-    { "type": "ESModule", "globs": ["**/*.mjs", "**/*.js"] }
-  ],
-  "assets": {
-    "binding": "ASSETS",
-    "directory": "dist/client"
-  }
+  "main": "src/server.ts",
 }

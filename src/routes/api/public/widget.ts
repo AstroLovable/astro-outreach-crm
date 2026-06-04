@@ -12,12 +12,7 @@ const JS = `(function(){
   var GREETING_DELAY = parseInt((s && s.dataset.greetingDelay) || "60", 10) * 1000;
   var SUPA = ${JSON.stringify(SUPA_URL)};
   var KEY = ${JSON.stringify(SUPA_ANON)};
-  var STORAGE_KEY = 'alc_chat_session_v1';
-  var stored = {};
-  try { stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '{}') || {}; } catch(e) {}
-  var sessionId = stored.sessionId || null;
-  var visitorSecret = stored.secret || null;
-  function saveSession(){ try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionId: sessionId, secret: visitorSecret })); } catch(e) {} }
+  var sessionId = null;
   var locked = false;
 
   var css = '.alc-btn{position:fixed;bottom:20px;right:20px;background:'+COLOR_DARK+';color:#fff;border:none;border-radius:999px;padding:14px 18px;font:600 14px system-ui;box-shadow:0 8px 24px rgba(46,58,89,.25);cursor:pointer;z-index:2147483646}'+
@@ -79,12 +74,10 @@ const JS = `(function(){
   }
   function hideTyping(){ if(typingEl){ typingEl.remove(); typingEl=null; } }
   function callFn(name, payload){
-    var p = payload || {};
-    if(sessionId && visitorSecret && !p.visitorSecret) p.visitorSecret = visitorSecret;
     return fetch(SUPA+'/functions/v1/'+name,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+KEY,'apikey':KEY},
-      body:JSON.stringify(p)
+      body:JSON.stringify(payload||{})
     }).then(function(r){return r.json()});
   }
   function lock(msg){
@@ -128,10 +121,6 @@ const JS = `(function(){
             if(m.created_at > lastSeenAt) lastSeenAt = m.created_at;
             if(seenIds[m.id]) return;
             seenIds[m.id] = 1;
-            if(m.content === '__SHOW_CONTACT_FORM__'){
-              showContactForm("A team member would like your details — please fill this in.");
-              return;
-            }
             if(m.role === 'human' || m.role === 'assistant'){
               hideTyping();
               add(m.role, m.content);
@@ -142,35 +131,11 @@ const JS = `(function(){
       }).catch(function(){});
   }
 
-  var humanTypingTimer = null;
-  function showHumanTyping(){
-    showTyping();
-    if(humanTypingTimer) clearTimeout(humanTypingTimer);
-    humanTypingTimer = setTimeout(function(){ hideTyping(); humanTypingTimer=null; }, 2000);
-  }
-
   function subscribeTyping(){
-    if(realtimeCh || !sessionId || typeof WebSocket === 'undefined') return;
-    try{
-      var wsUrl = SUPA.replace('https://','wss://') + '/realtime/v1/websocket?apikey=' + KEY + '&vsn=1.0.0';
-      var ws = new WebSocket(wsUrl);
-      var topic = 'realtime:chat:' + sessionId;
-      var hbTimer = null;
-      ws.onopen = function(){
-        ws.send(JSON.stringify({ topic: topic, event: 'phx_join', payload: { config: { broadcast: { self: false } } }, ref: '1' }));
-        hbTimer = setInterval(function(){
-          try{ ws.send(JSON.stringify({ topic:'phoenix', event:'heartbeat', payload:{}, ref:'hb' })); }catch(e){}
-        }, 25000);
-      };
-      ws.onmessage = function(ev){
-        try{
-          var m = JSON.parse(ev.data);
-          if(m.event === 'broadcast' && m.payload && m.payload.event === 'typing') showHumanTyping();
-        }catch(e){}
-      };
-      ws.onclose = function(){ if(hbTimer) clearInterval(hbTimer); realtimeCh=null; };
-      realtimeCh = ws;
-    }catch(e){}
+    if(realtimeCh || !sessionId) return;
+    // Lightweight realtime via fetch-based broadcast not used; rely on polling for messages.
+    // Typing indicator from human via a separate poll on broadcasts is out of scope for the no-SDK widget,
+    // so we display a typing bubble only while AI is processing (handled at send time).
   }
 
   function openWidget(){
@@ -217,13 +182,9 @@ const JS = `(function(){
         if(r.error === 'closed'){ lock('This chat has ended.'); return; }
         if(r.sessionId) {
           sessionId = r.sessionId;
-          if(r.visitorSecret) visitorSecret = r.visitorSecret;
-          saveSession();
           if(!pollTimer) pollTimer = setInterval(poll, 3000);
           subscribeTyping();
         }
-        if(r.error === 'rate_limited'){ add('bot', '⚠ Too many messages. Please wait a moment.'); return; }
-        if(r.error === 'forbidden'){ lock('This chat session is no longer available.'); return; }
         if(r.replyId) seenIds[r.replyId] = 1;
         if(r.reply) add('bot', r.reply);
         if(r.showContact) showContactForm("Let's get your details — we'll reply with a quote.");

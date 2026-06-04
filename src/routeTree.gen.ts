@@ -19,8 +19,6 @@ import { Route as BillingRouteImport } from './routes/billing'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicWidgetRouteImport } from './routes/api/public/widget'
-import { Route as ApiPublicHooksOverdueInvoicesRouteImport } from './routes/api/public/hooks/overdue-invoices'
-import { Route as ApiPublicHooksCloseIdleChatsRouteImport } from './routes/api/public/hooks/close-idle-chats'
 
 const TasksRoute = TasksRouteImport.update({
   id: '/tasks',
@@ -72,18 +70,6 @@ const ApiPublicWidgetRoute = ApiPublicWidgetRouteImport.update({
   path: '/api/public/widget',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicHooksOverdueInvoicesRoute =
-  ApiPublicHooksOverdueInvoicesRouteImport.update({
-    id: '/api/public/hooks/overdue-invoices',
-    path: '/api/public/hooks/overdue-invoices',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicHooksCloseIdleChatsRoute =
-  ApiPublicHooksCloseIdleChatsRouteImport.update({
-    id: '/api/public/hooks/close-idle-chats',
-    path: '/api/public/hooks/close-idle-chats',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -96,8 +82,6 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/api/public/widget': typeof ApiPublicWidgetRoute
-  '/api/public/hooks/close-idle-chats': typeof ApiPublicHooksCloseIdleChatsRoute
-  '/api/public/hooks/overdue-invoices': typeof ApiPublicHooksOverdueInvoicesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -110,8 +94,6 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/api/public/widget': typeof ApiPublicWidgetRoute
-  '/api/public/hooks/close-idle-chats': typeof ApiPublicHooksCloseIdleChatsRoute
-  '/api/public/hooks/overdue-invoices': typeof ApiPublicHooksOverdueInvoicesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,8 +107,6 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/api/public/widget': typeof ApiPublicWidgetRoute
-  '/api/public/hooks/close-idle-chats': typeof ApiPublicHooksCloseIdleChatsRoute
-  '/api/public/hooks/overdue-invoices': typeof ApiPublicHooksOverdueInvoicesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,8 +121,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tasks'
     | '/api/public/widget'
-    | '/api/public/hooks/close-idle-chats'
-    | '/api/public/hooks/overdue-invoices'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -155,8 +133,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tasks'
     | '/api/public/widget'
-    | '/api/public/hooks/close-idle-chats'
-    | '/api/public/hooks/overdue-invoices'
   id:
     | '__root__'
     | '/'
@@ -169,8 +145,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tasks'
     | '/api/public/widget'
-    | '/api/public/hooks/close-idle-chats'
-    | '/api/public/hooks/overdue-invoices'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,8 +158,6 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   TasksRoute: typeof TasksRoute
   ApiPublicWidgetRoute: typeof ApiPublicWidgetRoute
-  ApiPublicHooksCloseIdleChatsRoute: typeof ApiPublicHooksCloseIdleChatsRoute
-  ApiPublicHooksOverdueInvoicesRoute: typeof ApiPublicHooksOverdueInvoicesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -260,20 +232,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicWidgetRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/hooks/overdue-invoices': {
-      id: '/api/public/hooks/overdue-invoices'
-      path: '/api/public/hooks/overdue-invoices'
-      fullPath: '/api/public/hooks/overdue-invoices'
-      preLoaderRoute: typeof ApiPublicHooksOverdueInvoicesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/hooks/close-idle-chats': {
-      id: '/api/public/hooks/close-idle-chats'
-      path: '/api/public/hooks/close-idle-chats'
-      fullPath: '/api/public/hooks/close-idle-chats'
-      preLoaderRoute: typeof ApiPublicHooksCloseIdleChatsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -288,19 +246,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   TasksRoute: TasksRoute,
   ApiPublicWidgetRoute: ApiPublicWidgetRoute,
-  ApiPublicHooksCloseIdleChatsRoute: ApiPublicHooksCloseIdleChatsRoute,
-  ApiPublicHooksOverdueInvoicesRoute: ApiPublicHooksOverdueInvoicesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -11,7 +11,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/format";
-import { Send, Sparkles, X, UserPlus, Trash2, ClipboardList } from "lucide-react";
+import { Send, Sparkles, X, UserPlus, Trash2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { draftReply } from "@/lib/ai.functions";
 import {
@@ -257,40 +257,6 @@ function ChatPanel({ sessionId, onDeleted }: { sessionId: string; onDeleted: () 
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const sendContactForm = async () => {
-    try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
-      const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token || key;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, apikey: key },
-        body: JSON.stringify({ action: "request-contact", sessionId }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      toast.success("Contact form sent to visitor");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    }
-  };
-
-  // Broadcast typing event via Supabase Realtime when owner types in the reply box
-  const typingChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  useEffect(() => {
-    const ch = supabase.channel(`chat:${sessionId}`, { config: { broadcast: { self: false } } });
-    ch.subscribe();
-    typingChRef.current = ch;
-    return () => { supabase.removeChannel(ch); typingChRef.current = null; };
-  }, [sessionId]);
-  const lastTypingSentRef = useRef(0);
-  const broadcastTyping = () => {
-    const now = Date.now();
-    if (now - lastTypingSentRef.current < 1200) return;
-    lastTypingSentRef.current = now;
-    typingChRef.current?.send({ type: "broadcast", event: "typing", payload: { at: now } });
-  };
-
   const send = async () => {
     if (!reply.trim() || isClosed) return;
     if (status === "ai_handling" || status === "awaiting_human") {
@@ -326,13 +292,8 @@ function ChatPanel({ sessionId, onDeleted }: { sessionId: string; onDeleted: () 
           </div>
           <div className="text-xs text-muted-foreground truncate">{session.data?.page_url || "—"}</div>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
           <AiActiveToggle on={aiActive} disabled={isClosed} onChange={toggleAi} />
-          {!isClosed && (
-            <Button size="sm" variant="outline" onClick={sendContactForm}>
-              <ClipboardList className="h-4 w-4 mr-1" />Send Contact Form
-            </Button>
-          )}
           {!isClosed && (
             <Button size="sm" variant="ghost" onClick={() => close.mutate()}>
               <X className="h-4 w-4 mr-1" />Close
@@ -366,7 +327,7 @@ function ChatPanel({ sessionId, onDeleted }: { sessionId: string; onDeleted: () 
           </div>
         ) : (
           <>
-            <Textarea rows={3} value={reply} onChange={(e) => { setReply(e.target.value); broadcastTyping(); }} placeholder="Type a reply…" />
+            <Textarea rows={3} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Type a reply…" />
             <div className="flex justify-between">
               <Button size="sm" variant="outline" disabled={busy} onClick={aiDraft}>
                 <Sparkles className="h-4 w-4 mr-1" />{busy ? "…" : "AI draft"}

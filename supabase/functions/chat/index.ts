@@ -1,13 +1,6 @@
 // Public chat edge function — Groq AI, polling, client data extraction,
-// AI-initiated handover, contact form intake, office hours, request-contact,
-// idle auto-close, and per-session system prompt snapshot.
-//
-// Security:
-// - Visitor actions (send / poll / close / contact) require visitor_secret
-//   returned from session creation, preventing IDOR by knowledge of UUID.
-// - request-contact (CRM-initiated) requires a valid owner JWT.
-// - Best-effort in-memory per-IP rate limiting on session-creating and
-//   message-sending actions to slow abuse / Groq cost amplification.
+// AI-initiated handover, contact form intake, office hours, and per-session
+// system prompt snapshot.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const CORS = {
@@ -21,40 +14,11 @@ const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.3-70b-versatile";
 const HANDOVER_TOKEN = "HANDOVER_REQUESTED";
 const CONTACT_TOKEN = "SHOW_CONTACT_FORM";
-const SHOW_CONTACT_CTRL = "__SHOW_CONTACT_FORM__";
 
 const DEFAULT_PROMPT =
   `You are a helpful customer support assistant for AstroLabs & Co. Answer briefly and warmly. ` +
-  `If the visitor asks for a quote, leaves contact details, or seems ready to commit, include the exact token ${CONTACT_TOKEN} in your response. ` +
-  `If you cannot help or the visitor explicitly asks for a human, include the exact token ${HANDOVER_TOKEN} — a human teammate will be notified by email and take over.`;
-
-// ── Rate limiting (best-effort, per-isolate in-memory) ────────
-const RL_WINDOW_MS = 60_000;
-const RL_MAX_PER_MIN = 15;
-const RL_MAX_NEW_SESSIONS_PER_HOUR = 10;
-const rlMap = new Map<string, number[]>();
-const sessionMap = new Map<string, number[]>();
-
-function getIp(req: Request): string {
-  return (
-    req.headers.get("cf-connecting-ip") ||
-    req.headers.get("x-real-ip") ||
-    (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
-    "unknown"
-  );
-}
-function rateLimit(map: Map<string, number[]>, key: string, max: number, windowMs: number): boolean {
-  const now = Date.now();
-  const arr = (map.get(key) || []).filter((t) => now - t < windowMs);
-  if (arr.length >= max) { map.set(key, arr); return false; }
-  arr.push(now); map.set(key, arr); return true;
-}
-
-function randomSecret(): string {
-  const bytes = new Uint8Array(24);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
+  `If the visitor asks for a quote or wants to speak to a human, include the exact token ${CONTACT_TOKEN} in your response. ` +
+  `If you cannot help, include the exact token ${HANDOVER_TOKEN} and a human teammate will take over.`;
 
 async function callGroq(
   systemPrompt: string,
@@ -104,38 +68,6 @@ function isWithinOfficeHours(settings: {
   } catch { return true; }
 }
 
-async function upsertLeadFromContact(
-  db: ReturnType<typeof createClient>,
-  ownerId: string,
-  sessionId: string,
-  c: { name?: string|null; business?: string|null; business_type?: string|null; email?: string|null; phone?: string|null },
-) {
-  let existing: { id: string } | null = null;
-  if (c.email) {
-    const { data } = await db.from("clients").select("id")
-      .eq("owner_id", ownerId).ilike("email", c.email).maybeSingle();
-    existing = data as { id: string } | null;
-  }
-  const patch: Record<string, unknown> = {
-    name: c.name || c.email || "New lead",
-    business: c.business || null, service_type: c.business_type || null,
-    email: c.email || null, phone: c.phone || null,
-    source: "chat",
-  };
-  if (existing) {
-    await db.from("clients").update(patch).eq("id", existing.id);
-  } else {
-    await db.from("clients").insert({
-      owner_id: ownerId, ...patch, stage: "Lead",
-      notes: `Submitted via chat widget (session ${sessionId})`,
-    });
-  }
-  await db.from("activity").insert({
-    owner_id: ownerId, type: "chat",
-    description: `Contact form submitted: ${c.name || c.email || "anonymous"}`,
-  });
-}
-
 async function extractClientData(
   db: ReturnType<typeof createClient>,
   sessionId: string,
@@ -164,7 +96,35 @@ async function extractClientData(
       business: business ?? sess.business,
     }).eq("id", sessionId);
 
-    await upsertLeadFromContact(db, sess.owner_id as string, sessionId, { name, business, business_type, email, phone });
+    let existing: { id: string } | null = null;
+    if (email) {
+      const { data } = await db.from("clients").select("id")
+        .eq("owner_id", sess.owner_id).ilike("email", email).maybeSingle();
+      existing = data as { id: string } | null;
+    }
+    if (!existing && name) {
+      const { data } = await db.from("clients").select("id")
+        .eq("owner_id", sess.owner_id).ilike("name", name).maybeSingle();
+      existing = data as { id: string } | null;
+    }
+    const patch: Record<string, unknown> = {};
+    if (name) patch.name = name;
+    if (business) patch.business = business;
+    if (business_type) patch.service_type = business_type;
+    if (email) patch.email = email;
+    if (phone) patch.phone = phone;
+
+    if (existing) {
+      await db.from("clients").update(patch).eq("id", existing.id);
+    } else {
+      await db.from("clients").insert({
+        owner_id: sess.owner_id,
+        name: name ?? business ?? email ?? "Unnamed lead",
+        business: business ?? null, service_type: business_type ?? null,
+        email: email ?? null, phone: phone ?? null,
+        stage: "Lead", notes: `Auto-created from chat session ${sessionId}`,
+      });
+    }
   } catch (e) { console.error("[extractClientData]", e); }
 }
 
@@ -178,60 +138,16 @@ async function triggerHandover(url: string, serviceKey: string, sessionId: strin
   } catch (e) { console.error("[triggerHandover]", e); }
 }
 
-// Verify caller has a valid visitor_secret for the given session.
-async function verifyVisitor(
-  db: ReturnType<typeof createClient>,
-  sessionId: string,
-  secret: string | undefined | null,
-): Promise<boolean> {
-  if (!secret || typeof secret !== "string") return false;
-  const { data } = await db.from("chat_sessions")
-    .select("visitor_secret").eq("id", sessionId).maybeSingle();
-  const stored = (data as { visitor_secret?: string } | null)?.visitor_secret;
-  return !!stored && stored === secret;
-}
-
-// Verify caller is an authenticated owner of the given session.
-async function verifyOwner(
-  req: Request,
-  url: string,
-  anonKey: string,
-  sessionId: string,
-): Promise<boolean> {
-  const auth = req.headers.get("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!token) return false;
-  try {
-    const userClient = createClient(url, anonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: u } = await userClient.auth.getUser(token);
-    const uid = u?.user?.id;
-    if (!uid) return false;
-    const { data: sess } = await userClient.from("chat_sessions")
-      .select("owner_id").eq("id", sessionId).maybeSingle();
-    return !!sess && (sess as { owner_id?: string }).owner_id === uid;
-  } catch { return false; }
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   try {
-    const ip = getIp(req);
     const body = await req.json();
     const url = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
     const db = createClient(url, serviceKey);
-
-    const visitorSecret: string | undefined = body.visitorSecret;
 
     // ── Poll ─────────────────────────────────────────────
     if (body.action === "poll" && body.sessionId) {
-      if (!(await verifyVisitor(db, body.sessionId, visitorSecret))) {
-        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: CORS });
-      }
       const since = typeof body.since === "string" ? body.since : "1970-01-01T00:00:00Z";
       const { data: messages } = await db.from("chat_messages")
         .select("id, role, content, created_at").eq("session_id", body.sessionId)
@@ -244,31 +160,14 @@ Deno.serve(async (req) => {
 
     // ── Close ────────────────────────────────────────────
     if (body.action === "close" && body.sessionId) {
-      if (!(await verifyVisitor(db, body.sessionId, visitorSecret))) {
-        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: CORS });
-      }
       await db.from("chat_sessions")
         .update({ status: "closed", updated_at: new Date().toISOString() })
         .eq("id", body.sessionId);
       return new Response(JSON.stringify({ ok: true }), { headers: CORS });
     }
 
-    // ── CRM requests contact form push ───────────────────
-    if (body.action === "request-contact" && body.sessionId) {
-      if (!(await verifyOwner(req, url, anonKey, body.sessionId))) {
-        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: CORS });
-      }
-      await db.from("chat_messages").insert({
-        session_id: body.sessionId, role: "assistant", content: SHOW_CONTACT_CTRL,
-      });
-      return new Response(JSON.stringify({ ok: true }), { headers: CORS });
-    }
-
     // ── Contact form submit ──────────────────────────────
     if (body.action === "contact" && body.sessionId) {
-      if (!(await verifyVisitor(db, body.sessionId, visitorSecret))) {
-        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: CORS });
-      }
       const { name, business, business_type, email, phone } = body.contact || {};
       const { data: sess } = await db.from("chat_sessions")
         .select("owner_id, visitor_name, visitor_email, business").eq("id", body.sessionId).maybeSingle();
@@ -278,49 +177,59 @@ Deno.serve(async (req) => {
           visitor_email: email || sess.visitor_email,
           business: business || sess.business,
         }).eq("id", body.sessionId);
-        await upsertLeadFromContact(db, sess.owner_id as string, body.sessionId, { name, business, business_type, email, phone });
+
+        let existing: { id: string } | null = null;
+        if (email) {
+          const { data } = await db.from("clients").select("id")
+            .eq("owner_id", sess.owner_id).ilike("email", email).maybeSingle();
+          existing = data as { id: string } | null;
+        }
+        const patch: Record<string, unknown> = {
+          name: name || email || "New lead",
+          business: business || null, service_type: business_type || null,
+          email: email || null, phone: phone || null,
+        };
+        if (existing) {
+          await db.from("clients").update(patch).eq("id", existing.id);
+        } else {
+          await db.from("clients").insert({
+            owner_id: sess.owner_id, ...patch, stage: "Lead",
+            notes: `Submitted via chat widget contact form (session ${body.sessionId})`,
+          });
+        }
+        await db.from("activity").insert({
+          owner_id: sess.owner_id, type: "chat",
+          description: `Contact form submitted: ${name || email || "anonymous"}`,
+        });
       }
       return new Response(JSON.stringify({ ok: true }), { headers: CORS });
     }
 
     // ── Widget chat ──────────────────────────────────────
-    // Per-IP rate limit for message/send and session creation
-    if (!rateLimit(rlMap, ip, RL_MAX_PER_MIN, RL_WINDOW_MS)) {
-      return new Response(JSON.stringify({ error: "rate_limited" }), { status: 429, headers: CORS });
-    }
-
     let sessionId: string | null = body.sessionId ?? null;
-    let issuedSecret: string | null = null;
     let sessionRow: { status: string; system_prompt: string | null; owner_id: string | null } | null = null;
 
     if (!sessionId) {
-      if (!rateLimit(sessionMap, ip, RL_MAX_NEW_SESSIONS_PER_HOUR, 60 * 60 * 1000)) {
-        return new Response(JSON.stringify({ error: "rate_limited" }), { status: 429, headers: CORS });
-      }
       const { data: ownerRow } = await db.from("settings")
         .select("owner_id, chatbot_system_prompt, office_hours_start, office_hours_end, office_days, office_timezone")
         .limit(1).maybeSingle();
       const snapshot = (ownerRow?.chatbot_system_prompt as string | undefined)?.trim() || DEFAULT_PROMPT;
+      // Append office-hours rule
       const finalPrompt = ownerRow
-        ? `${snapshot}\n\nIMPORTANT: Office hours are currently ${
+        ? `${snapshot}\n\nIMPORTANT: If outside office hours (currently ${
             isWithinOfficeHours(ownerRow as any) ? "OPEN" : "CLOSED"
-          }. If CLOSED, tell the visitor the team is offline and include ${CONTACT_TOKEN} in your reply.`
+          }), tell the visitor the team is unavailable and include ${CONTACT_TOKEN} in your reply.`
         : snapshot;
 
-      issuedSecret = randomSecret();
       const { data, error } = await db.from("chat_sessions").insert({
         page_url: body.pageUrl ?? null, status: "ai_handling",
         owner_id: (ownerRow as any)?.owner_id ?? null,
         system_prompt: finalPrompt,
-        visitor_secret: issuedSecret,
       }).select("id, status, system_prompt, owner_id").single();
       if (error) throw error;
       sessionId = data.id;
       sessionRow = data as any;
     } else {
-      if (!(await verifyVisitor(db, sessionId, visitorSecret))) {
-        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: CORS });
-      }
       const { data } = await db.from("chat_sessions")
         .select("status, system_prompt, owner_id").eq("id", sessionId).maybeSingle();
       sessionRow = data as any;
@@ -334,6 +243,8 @@ Deno.serve(async (req) => {
       await db.from("chat_messages").insert({
         session_id: sessionId, role: "visitor", content: body.message.slice(0, 2000),
       });
+      // Bump unread for owner
+      await db.rpc; // no-op placeholder; direct update below
       const { data: cur } = await db.from("chat_sessions").select("unread_count").eq("id", sessionId).maybeSingle();
       await db.from("chat_sessions").update({
         unread_count: ((cur?.unread_count as number) ?? 0) + 1,
@@ -350,11 +261,9 @@ Deno.serve(async (req) => {
       const { data: history } = await db.from("chat_messages")
         .select("role, content").eq("session_id", sessionId!)
         .order("created_at", { ascending: true }).limit(20);
-      const aiMessages = (history ?? [])
-        .filter((m: { content: string }) => m.content !== SHOW_CONTACT_CTRL)
-        .map((m: { role: string; content: string }) => ({
-          role: m.role === "visitor" ? "user" : "assistant", content: m.content,
-        }));
+      const aiMessages = (history ?? []).map((m: { role: string; content: string }) => ({
+        role: m.role === "visitor" ? "user" : "assistant", content: m.content,
+      }));
       let rawReply = await callGroq(sessionRow.system_prompt || DEFAULT_PROMPT, aiMessages);
 
       if (rawReply.includes(HANDOVER_TOKEN)) {
@@ -385,9 +294,9 @@ Deno.serve(async (req) => {
       extractClientData(db, sessionId!, transcript).catch((e) => console.error(e));
     }
 
-    return new Response(JSON.stringify({ sessionId, visitorSecret: issuedSecret, reply, replyId, handover, showContact }), { headers: CORS });
+    return new Response(JSON.stringify({ sessionId, reply, replyId, handover, showContact }), { headers: CORS });
   } catch (err) {
     console.error("[chat]", err);
-    return new Response(JSON.stringify({ error: "Internal error" }), { status: 500, headers: CORS });
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }), { status: 500, headers: CORS });
   }
 });
