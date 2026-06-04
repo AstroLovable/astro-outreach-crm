@@ -285,12 +285,20 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
             </div>
           </div>
 
-          <div className="flex items-center gap-3"><Switch checked={f.vat} onCheckedChange={(v) => setF({ ...f, vat: v })} /><Label>Apply 20% VAT</Label></div>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2"><Switch checked={f.vat} onCheckedChange={(v) => setF({ ...f, vat: v })} /><Label>Apply 20% VAT</Label></div>
+            {kind === "invoice" && (
+              <div className="flex items-center gap-2"><Switch checked={!!f.deposit_split} onCheckedChange={(v) => setF({ ...f, deposit_split: v })} /><Label>50% deposit invoice</Label></div>
+            )}
+          </div>
 
           <div className="ml-auto w-64 text-sm space-y-1">
             <div className="flex justify-between"><span>Subtotal</span><span>{gbp(subtotal)}</span></div>
             {f.vat && <div className="flex justify-between"><span>VAT (20%)</span><span>{gbp(vat_amount)}</span></div>}
             <div className="flex justify-between font-semibold text-base border-t pt-1"><span>Total</span><span>{gbp(total)}</span></div>
+            {kind === "invoice" && f.deposit_split && (
+              <div className="flex justify-between text-accent"><span>Deposit due now (50%)</span><span>{gbp(total / 2)}</span></div>
+            )}
           </div>
 
           <div><Label>Notes</Label><Textarea rows={3} value={f.notes || ""} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
