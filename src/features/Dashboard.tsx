@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/AppShell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { gbp, fmtDate, PIPELINE_STAGES } from "@/lib/format";
-import { Users, Receipt, CheckSquare, Plus, MessageSquare } from "lucide-react";
+import { Users, Receipt, CheckSquare, Plus, MessageSquare, CalendarClock } from "lucide-react";
 import { AiActiveToggle } from "@/routes/chats";
 import { useEffect } from "react";
 import { toast } from "sonner";
