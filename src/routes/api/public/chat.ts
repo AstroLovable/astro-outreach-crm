@@ -143,7 +143,7 @@ async function extractClientData(sessionId: string, transcript: string) {
         .eq("owner_id", sess.owner_id).ilike("name", name).maybeSingle();
       existing = data as { id: string } | null;
     }
-    const patch: Record<string, unknown> = {};
+    const patch: Record<string, any> = {};
     if (name) patch.name = name;
     if (business) patch.business = business;
     if (business_type) patch.service_type = business_type;
@@ -229,7 +229,7 @@ async function handle(req: Request): Promise<Response> {
             .eq("owner_id", sess.owner_id).ilike("email", email).maybeSingle();
           existing = data as { id: string } | null;
         }
-        const patch: Record<string, unknown> = {
+        const patch: Record<string, any> = {
           name: name || email || "New lead",
           business: business || null, service_type: business_type || null,
           email: email || null, phone: phone || null,
