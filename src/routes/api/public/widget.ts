@@ -83,10 +83,10 @@ const JS = `(function(){
     msgs.appendChild(typingEl); msgs.scrollTop = msgs.scrollHeight;
   }
   function hideTyping(){ if(typingEl){ typingEl.remove(); typingEl=null; } }
-  function callFn(name, payload){
-    return fetch(SUPA+'/functions/v1/'+name,{
+  function callFn(_name, payload){
+    return fetch(CHAT_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+KEY,'apikey':KEY},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload||{})
     }).then(function(r){return r.json()});
   }
