@@ -132,7 +132,10 @@ export function Dashboard() {
         </Card>
       </div>
 
-      <LiveChatsCard />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+        <LiveChatsCard />
+        <FollowUpsCard />
+      </div>
 
       <Card className="card-surface p-5 mt-6 flex items-center justify-between">
         <div>
