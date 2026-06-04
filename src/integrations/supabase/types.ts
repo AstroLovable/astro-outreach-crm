@@ -86,6 +86,7 @@ export type Database = {
           updated_at: string
           visitor_email: string | null
           visitor_name: string | null
+          visitor_secret: string | null
         }
         Insert: {
           business?: string | null
@@ -99,6 +100,7 @@ export type Database = {
           updated_at?: string
           visitor_email?: string | null
           visitor_name?: string | null
+          visitor_secret?: string | null
         }
         Update: {
           business?: string | null
@@ -112,6 +114,7 @@ export type Database = {
           updated_at?: string
           visitor_email?: string | null
           visitor_name?: string | null
+          visitor_secret?: string | null
         }
         Relationships: []
       }
@@ -129,6 +132,7 @@ export type Database = {
           package: string | null
           phone: string | null
           service_type: string | null
+          source: string | null
           stage: string
           stage_changed_at: string
           status_note: string | null
@@ -148,6 +152,7 @@ export type Database = {
           package?: string | null
           phone?: string | null
           service_type?: string | null
+          source?: string | null
           stage?: string
           stage_changed_at?: string
           status_note?: string | null
@@ -167,6 +172,7 @@ export type Database = {
           package?: string | null
           phone?: string | null
           service_type?: string | null
+          source?: string | null
           stage?: string
           stage_changed_at?: string
           status_note?: string | null
@@ -518,7 +524,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_cron_secret: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
