@@ -151,7 +151,7 @@ async function extractClientData(sessionId: string, transcript: string) {
     if (phone) patch.phone = phone;
 
     if (existing) {
-      await supabaseAdmin.from("clients").update(patch).eq("id", existing.id);
+      await supabaseAdmin.from("clients").update(patch as any).eq("id", existing.id);
     } else {
       await supabaseAdmin.from("clients").insert({
         owner_id: sess.owner_id,
@@ -235,7 +235,7 @@ async function handle(req: Request): Promise<Response> {
           email: email || null, phone: phone || null,
         };
         if (existing) {
-          await supabaseAdmin.from("clients").update(patch).eq("id", existing.id);
+          await supabaseAdmin.from("clients").update(patch as any).eq("id", existing.id);
         } else {
           await supabaseAdmin.from("clients").insert({
             owner_id: sess.owner_id, ...patch, stage: "Lead",
