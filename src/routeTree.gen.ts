@@ -19,6 +19,7 @@ import { Route as BillingRouteImport } from './routes/billing'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicWidgetRouteImport } from './routes/api/public/widget'
+import { Route as ApiPublicChatRouteImport } from './routes/api/public/chat'
 
 const TasksRoute = TasksRouteImport.update({
   id: '/tasks',
@@ -70,6 +71,11 @@ const ApiPublicWidgetRoute = ApiPublicWidgetRouteImport.update({
   path: '/api/public/widget',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicChatRoute = ApiPublicChatRouteImport.update({
+  id: '/api/public/chat',
+  path: '/api/public/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
+  '/api/public/chat': typeof ApiPublicChatRoute
   '/api/public/widget': typeof ApiPublicWidgetRoute
 }
 export interface FileRoutesByTo {
@@ -93,6 +100,7 @@ export interface FileRoutesByTo {
   '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
+  '/api/public/chat': typeof ApiPublicChatRoute
   '/api/public/widget': typeof ApiPublicWidgetRoute
 }
 export interface FileRoutesById {
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
+  '/api/public/chat': typeof ApiPublicChatRoute
   '/api/public/widget': typeof ApiPublicWidgetRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/proposals'
     | '/settings'
     | '/tasks'
+    | '/api/public/chat'
     | '/api/public/widget'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/proposals'
     | '/settings'
     | '/tasks'
+    | '/api/public/chat'
     | '/api/public/widget'
   id:
     | '__root__'
@@ -144,6 +155,7 @@ export interface FileRouteTypes {
     | '/proposals'
     | '/settings'
     | '/tasks'
+    | '/api/public/chat'
     | '/api/public/widget'
   fileRoutesById: FileRoutesById
 }
@@ -157,6 +169,7 @@ export interface RootRouteChildren {
   ProposalsRoute: typeof ProposalsRoute
   SettingsRoute: typeof SettingsRoute
   TasksRoute: typeof TasksRoute
+  ApiPublicChatRoute: typeof ApiPublicChatRoute
   ApiPublicWidgetRoute: typeof ApiPublicWidgetRoute
 }
 
@@ -232,6 +245,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicWidgetRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/chat': {
+      id: '/api/public/chat'
+      path: '/api/public/chat'
+      fullPath: '/api/public/chat'
+      preLoaderRoute: typeof ApiPublicChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -245,8 +265,19 @@ const rootRouteChildren: RootRouteChildren = {
   ProposalsRoute: ProposalsRoute,
   SettingsRoute: SettingsRoute,
   TasksRoute: TasksRoute,
+  ApiPublicChatRoute: ApiPublicChatRoute,
   ApiPublicWidgetRoute: ApiPublicWidgetRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
