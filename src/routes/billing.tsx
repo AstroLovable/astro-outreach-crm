@@ -231,6 +231,17 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
       <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
         <SheetHeader><SheetTitle>{editing ? `Edit ${kind}` : `New ${kind}`}</SheetTitle></SheetHeader>
         <div className="mt-4 space-y-4">
+          <div>
+            <Label>Package</Label>
+            <Select value={f.package || ""} onValueChange={applyPackage}>
+              <SelectTrigger><SelectValue placeholder="Choose a package (auto-fills line items)" /></SelectTrigger>
+              <SelectContent>
+                {Object.keys(PACKAGE_PRESETS).map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Client</Label>
@@ -252,7 +263,11 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
             </div>
             <div><Label>Issue date</Label><Input type="date" value={f.issue_date} onChange={(e) => setF({ ...f, issue_date: e.target.value })} /></div>
             <div><Label>Due date</Label><Input type="date" value={f.due_date || ""} onChange={(e) => setF({ ...f, due_date: e.target.value })} /></div>
+            {kind === "invoice" && (
+              <div className="col-span-2"><Label>Job reference</Label><Input value={f.job_reference || ""} onChange={(e) => setF({ ...f, job_reference: e.target.value })} placeholder="Optional project / job ref" /></div>
+            )}
           </div>
+
 
           <div>
             <Label>Line items</Label>
