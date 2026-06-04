@@ -3,9 +3,9 @@
   "name": "astro-outreach-crm",
   "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "dist/server/server.js",  // ← point to built output, not src
+  "main": "dist/server/server.js",
   "assets": {
-    "directory": "./dist/client",   // ← serve static client assets
+    "directory": "./dist/client",
     "binding": "ASSETS"
   }
 }
