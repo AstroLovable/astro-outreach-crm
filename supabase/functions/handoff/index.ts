@@ -1,4 +1,5 @@
 // Human handoff edge function — emails support via Brevo and marks session as awaiting_human.
+// Requires service-role bearer auth; only intended to be called by the chat edge function.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const CORS = {
@@ -8,17 +9,32 @@ const CORS = {
   "Content-Type": "application/json",
 };
 
+const esc = (s: unknown) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .slice(0, 4000);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
   try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Auth: only the chat function (using the service-role key) may call this.
+    const auth = req.headers.get("Authorization");
+    if (!serviceKey || auth !== `Bearer ${serviceKey}`) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: CORS });
+    }
+
     const { sessionId, pageUrl, transcript, reason } = await req.json();
     if (!sessionId) {
       return new Response(JSON.stringify({ error: "sessionId required" }), { status: 400, headers: CORS });
     }
 
-    const url = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const db = createClient(url, serviceKey);
 
     await db
@@ -42,14 +58,13 @@ Deno.serve(async (req) => {
 
     const html = `
       <h2>Chat Handoff Requested</h2>
-      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
-      <p><strong>Page:</strong> ${pageUrl ?? "—"}</p>
-      <p><strong>Session ID:</strong> ${sessionId}</p>
+      ${reason ? `<p><strong>Reason:</strong> ${esc(reason)}</p>` : ""}
+      <p><strong>Page:</strong> ${esc(pageUrl ?? "—")}</p>
+      <p><strong>Session ID:</strong> ${esc(sessionId)}</p>
       <h3>Transcript</h3>
-      <pre style="white-space:pre-wrap;font-family:system-ui;background:#f5f5f5;padding:12px;border-radius:6px">${transcriptText.replace(/</g, "&lt;")}</pre>
+      <pre style="white-space:pre-wrap;font-family:system-ui;background:#f5f5f5;padding:12px;border-radius:6px">${esc(transcriptText)}</pre>
     `;
 
-    // Call send-email function
     try {
       const r = await fetch(`${url}/functions/v1/send-email`, {
         method: "POST",
