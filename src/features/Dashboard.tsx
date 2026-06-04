@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/AppShell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { gbp, fmtDate, PIPELINE_STAGES } from "@/lib/format";
-import { Users, Receipt, CheckSquare, Plus, MessageSquare } from "lucide-react";
+import { Users, Receipt, CheckSquare, Plus, MessageSquare, CalendarClock } from "lucide-react";
 import { AiActiveToggle } from "@/routes/chats";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -132,7 +132,10 @@ export function Dashboard() {
         </Card>
       </div>
 
-      <LiveChatsCard />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+        <LiveChatsCard />
+        <FollowUpsCard />
+      </div>
 
       <Card className="card-surface p-5 mt-6 flex items-center justify-between">
         <div>
@@ -234,6 +237,53 @@ function LiveChatsCard() {
                 onChange={(next) => toggle(s, next)}
                 size="sm"
               />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function FollowUpsCard() {
+  const { user } = useAuth();
+  const today = new Date().toISOString().slice(0, 10);
+  const followUps = useQuery({
+    queryKey: ["dash-followups", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name, follow_up_date, status_note, stage")
+        .eq("owner_id", user!.id)
+        .not("follow_up_date", "is", null)
+        .lte("follow_up_date", today)
+        .order("follow_up_date", { ascending: true })
+        .limit(8);
+      return data || [];
+    },
+  });
+  const rows = followUps.data || [];
+  return (
+    <Card className="card-surface p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="h-4 w-4 text-muted-foreground" />
+          <h2 className="font-semibold">Follow-ups due</h2>
+        </div>
+        <Link to="/clients" className="text-xs text-accent hover:underline">Open clients →</Link>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing due. Nice work.</p>
+      ) : (
+        <ul className="divide-y">
+          {rows.map((c: any) => (
+            <li key={c.id} className="py-2.5 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium truncate">{c.name}</div>
+                <div className="text-[11px] text-muted-foreground truncate">{c.stage} · {c.status_note || "—"}</div>
+              </div>
+              <span className="text-xs text-destructive whitespace-nowrap">{c.follow_up_date}</span>
             </li>
           ))}
         </ul>

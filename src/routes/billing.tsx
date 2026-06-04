@@ -170,10 +170,17 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
   const wasOpen = useRef(false);
 
   function initial() {
-    return editing || {
+    if (editing) {
+      return {
+        ...editing,
+        deposit_split: !!editing.deposit_part,
+        package: editing.package || "",
+      };
+    }
+    return {
       client_id: "", issue_date: new Date().toISOString().slice(0, 10),
       due_date: "", line_items: [{ description: "", qty: 1, unit_price: 0 }] as LineItem[],
-      vat: settings?.vat_enabled ?? true, notes: "", status: kind === "invoice" ? "Draft" : "Draft", number: editing?.number || "",
+      vat: settings?.vat_enabled ?? true, notes: "", status: kind === "invoice" ? "Draft" : "Draft", number: "",
       package: "", job_reference: "", deposit_split: false,
     };
   }
@@ -207,6 +214,10 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
       line_items: f.line_items, subtotal, vat: f.vat, vat_amount, total,
       notes: f.notes || null, status: f.status, number: number || null,
     };
+    if (kind === "invoice") {
+      payload.job_reference = f.job_reference || null;
+      payload.deposit_part = f.deposit_split ? total / 2 : null;
+    }
     if (editing) {
       const { error } = await supabase.from(table).update(payload).eq("id", editing.id);
       if (error) return toast.error(error.message);
@@ -231,6 +242,17 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
       <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
         <SheetHeader><SheetTitle>{editing ? `Edit ${kind}` : `New ${kind}`}</SheetTitle></SheetHeader>
         <div className="mt-4 space-y-4">
+          <div>
+            <Label>Package</Label>
+            <Select value={f.package || ""} onValueChange={applyPackage}>
+              <SelectTrigger><SelectValue placeholder="Choose a package (auto-fills line items)" /></SelectTrigger>
+              <SelectContent>
+                {Object.keys(PACKAGE_PRESETS).map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Client</Label>
@@ -252,7 +274,11 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
             </div>
             <div><Label>Issue date</Label><Input type="date" value={f.issue_date} onChange={(e) => setF({ ...f, issue_date: e.target.value })} /></div>
             <div><Label>Due date</Label><Input type="date" value={f.due_date || ""} onChange={(e) => setF({ ...f, due_date: e.target.value })} /></div>
+            {kind === "invoice" && (
+              <div className="col-span-2"><Label>Job reference</Label><Input value={f.job_reference || ""} onChange={(e) => setF({ ...f, job_reference: e.target.value })} placeholder="Optional project / job ref" /></div>
+            )}
           </div>
+
 
           <div>
             <Label>Line items</Label>
@@ -270,12 +296,20 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
             </div>
           </div>
 
-          <div className="flex items-center gap-3"><Switch checked={f.vat} onCheckedChange={(v) => setF({ ...f, vat: v })} /><Label>Apply 20% VAT</Label></div>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2"><Switch checked={f.vat} onCheckedChange={(v) => setF({ ...f, vat: v })} /><Label>Apply 20% VAT</Label></div>
+            {kind === "invoice" && (
+              <div className="flex items-center gap-2"><Switch checked={!!f.deposit_split} onCheckedChange={(v) => setF({ ...f, deposit_split: v })} /><Label>50% deposit invoice</Label></div>
+            )}
+          </div>
 
           <div className="ml-auto w-64 text-sm space-y-1">
             <div className="flex justify-between"><span>Subtotal</span><span>{gbp(subtotal)}</span></div>
             {f.vat && <div className="flex justify-between"><span>VAT (20%)</span><span>{gbp(vat_amount)}</span></div>}
             <div className="flex justify-between font-semibold text-base border-t pt-1"><span>Total</span><span>{gbp(total)}</span></div>
+            {kind === "invoice" && f.deposit_split && (
+              <div className="flex justify-between text-accent"><span>Deposit due now (50%)</span><span>{gbp(total / 2)}</span></div>
+            )}
           </div>
 
           <div><Label>Notes</Label><Textarea rows={3} value={f.notes || ""} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>

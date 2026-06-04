@@ -1,17 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const SUPA_URL = "https://rjvlscwkwzjuksnwwujo.supabase.co";
-const SUPA_ANON =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqdmxzY3drd3pqdWtzbnd3dWpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjAzMzEsImV4cCI6MjA5NDkzNjMzMX0.HFnEkzwacpDVSDUhchJSDZzs96UWZNNNPonSu89HrFE";
-
 const JS = `(function(){
   var s = document.currentScript;
   var TITLE = (s && s.dataset.title) || "Chat with us";
   var COLOR = (s && s.dataset.color) || "#4A6FA5";
   var COLOR_DARK = (s && s.dataset.colorDark) || "#2E3A59";
   var GREETING_DELAY = parseInt((s && s.dataset.greetingDelay) || "60", 10) * 1000;
-  var SUPA = ${JSON.stringify(SUPA_URL)};
-  var KEY = ${JSON.stringify(SUPA_ANON)};
+  var CHAT_URL = (s && s.src ? new URL(s.src).origin : location.origin) + '/api/public/chat';
   var STORAGE_KEY = 'alc_chat_session_v1';
   var sessionId = null;
   var visitorSecret = null;
@@ -88,10 +83,10 @@ const JS = `(function(){
     msgs.appendChild(typingEl); msgs.scrollTop = msgs.scrollHeight;
   }
   function hideTyping(){ if(typingEl){ typingEl.remove(); typingEl=null; } }
-  function callFn(name, payload){
-    return fetch(SUPA+'/functions/v1/'+name,{
+  function callFn(_name, payload){
+    return fetch(CHAT_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+KEY,'apikey':KEY},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload||{})
     }).then(function(r){return r.json()});
   }
