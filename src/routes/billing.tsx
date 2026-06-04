@@ -206,6 +206,8 @@ function DocEditor({ kind, open, onOpenChange, editing, clients, onSaved }: any)
       issue_date: f.issue_date, due_date: f.due_date || null,
       line_items: f.line_items, subtotal, vat: f.vat, vat_amount, total,
       notes: f.notes || null, status: f.status, number: number || null,
+      job_reference: f.job_reference || null,
+      deposit_part: kind === "invoice" && f.deposit_split ? total / 2 : null,
     };
     if (editing) {
       const { error } = await supabase.from(table).update(payload).eq("id", editing.id);
