@@ -66,8 +66,22 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
+function bridgeEnvToProcess(env: unknown) {
+  if (!env || typeof env !== "object") return;
+  try {
+    const target = (process.env ?? {}) as Record<string, string>;
+    for (const [k, v] of Object.entries(env as Record<string, unknown>)) {
+      if (typeof v === "string" && target[k] === undefined) target[k] = v;
+    }
+    (process as any).env = target;
+  } catch {
+    // ignore — process.env may be read-only in some runtimes
+  }
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    bridgeEnvToProcess(env);
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
