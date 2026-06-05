@@ -85,9 +85,7 @@ async function callAI(
   }
   return callGemini(systemPrompt, messages, opts);
 }
-  const data = await res.json();
-  return (data.choices?.[0]?.message?.content ?? "").trim();
-}
+
 
 async function verifyVisitor(sessionId: string, visitorSecret: unknown) {
   if (!sessionId || typeof visitorSecret !== "string" || !visitorSecret) {
