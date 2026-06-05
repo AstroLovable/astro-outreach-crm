@@ -4,6 +4,36 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.3-70b-versatile";
+const GEMINI_MODEL = "gemini-2.0-flash";
+
+async function callGemini(opts: {
+  system: string;
+  messages: { role: "user" | "assistant" | "system"; content: string }[];
+  max_tokens: number;
+}): Promise<string> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("GEMINI_API_KEY not configured");
+  const contents = opts.messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: opts.system }] },
+        contents,
+        generationConfig: { maxOutputTokens: opts.max_tokens },
+      }),
+    },
+  );
+  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const parts = data?.candidates?.[0]?.content?.parts ?? [];
+  return parts.map((p: any) => p?.text ?? "").join("");
+}
 
 async function groq(opts: {
   system: string;
@@ -11,7 +41,7 @@ async function groq(opts: {
   max_tokens: number;
 }) {
   const key = process.env.GROQ_API_KEY;
-  if (!key) throw new Error("GROQ_API_KEY not configured");
+  if (!key) return callGemini(opts);
   const res = await fetch(GROQ_URL, {
     method: "POST",
     headers: {
@@ -25,8 +55,8 @@ async function groq(opts: {
     }),
   });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Groq error ${res.status}: ${text}`);
+    console.error(`[ai] Groq ${res.status}, falling back to Gemini`);
+    return callGemini(opts);
   }
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? "";

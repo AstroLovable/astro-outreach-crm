@@ -13,8 +13,9 @@ const CORS = {
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
-const GEMINI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const GEMINI_MODEL = "google/gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_URL = (model: string) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 const HANDOVER_TOKEN = "HANDOVER_REQUESTED";
 const CONTACT_TOKEN = "SHOW_CONTACT_FORM";
 
@@ -29,12 +30,41 @@ function jres(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: CORS });
 }
 
+async function callGemini(
+  systemPrompt: string,
+  messages: { role: string; content: string }[],
+  opts: { max_tokens?: number; json?: boolean },
+): Promise<string> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("GEMINI_API_KEY not configured");
+  const contents = messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+  const res = await fetch(`${GEMINI_URL(GEMINI_MODEL)}?key=${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents,
+      generationConfig: {
+        maxOutputTokens: opts.max_tokens ?? 300,
+        ...(opts.json ? { responseMimeType: "application/json" } : {}),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const parts = data?.candidates?.[0]?.content?.parts ?? [];
+  return parts.map((p: any) => p?.text ?? "").join("").trim();
+}
+
 async function callAI(
   systemPrompt: string,
   messages: { role: string; content: string }[],
   opts: { max_tokens?: number; json?: boolean } = {},
 ): Promise<string> {
-  // Prefer Groq when configured; fall back to Lovable Gemini gateway.
+  // Prefer Groq; fall back to Gemini (direct Google API).
   const groqKey = process.env.GROQ_API_KEY;
   if (groqKey) {
     const res = await fetch(GROQ_URL, {
@@ -52,25 +82,10 @@ async function callAI(
       return (data.choices?.[0]?.message?.content ?? "").trim();
     }
     console.error(`[chat] Groq ${res.status}: ${await res.text()}`);
-    // fall through to Gemini
   }
-
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  if (!lovableKey) throw new Error("No AI provider configured (GROQ_API_KEY or LOVABLE_API_KEY)");
-  const res = await fetch(GEMINI_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
-    body: JSON.stringify({
-      model: GEMINI_MODEL,
-      max_tokens: opts.max_tokens ?? 300,
-      ...(opts.json ? { response_format: { type: "json_object" } } : {}),
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return (data.choices?.[0]?.message?.content ?? "").trim();
+  return callGemini(systemPrompt, messages, opts);
 }
+
 
 async function verifyVisitor(sessionId: string, visitorSecret: unknown) {
   if (!sessionId || typeof visitorSecret !== "string" || !visitorSecret) {
