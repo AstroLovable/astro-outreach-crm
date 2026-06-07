@@ -8,6 +8,18 @@
     "directory": "./dist/client",
     "binding": "ASSETS"
   },
+  // NOTE: This is a PRIVATE repo. These values are baked into the Worker at
+  // deploy time. Truly sensitive values (service role key, paid API keys) are
+  // NOT committed — set those as Cloudflare "Secrets" in the dashboard, or via
+  // `wrangler secret put <NAME>`. See README / chat for the list.
+  "vars": {
+    "SUPABASE_URL": "https://rjvlscwkwzjuksnwwujo.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqdmxzY3drd3pqdWtzbnd3dWpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjAzMzEsImV4cCI6MjA5NDkzNjMzMX0.HFnEkzwacpDVSDUhchJSDZzs96UWZNNNPonSu89HrFE",
+    "VITE_SUPABASE_URL": "https://rjvlscwkwzjuksnwwujo.supabase.co",
+    "VITE_SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqdmxzY3drd3pqdWtzbnd3dWpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjAzMzEsImV4cCI6MjA5NDkzNjMzMX0.HFnEkzwacpDVSDUhchJSDZzs96UWZNNNPonSu89HrFE",
+    "VITE_SUPABASE_PROJECT_ID": "rjvlscwkwzjuksnwwujo",
+    "GEMINI_API_KEY": "AIzaSyBU3kPlqXimnLZ3mjeoTUqqexGJR3K5UNQ"
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
