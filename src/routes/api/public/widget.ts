@@ -131,21 +131,11 @@ const JS = `(function(){
             if(m.created_at > lastSeenAt) lastSeenAt = m.created_at;
             if(seenIds[m.id]) return;
             seenIds[m.id] = 1;
-            if(m.role === 'human' || m.role === 'assistant'){
-              hideTyping();
-              add(m.role, m.content);
-            }
+            if(m.role === 'human'){ add('bot', m.content); }
           });
         }
         if(r && r.status === 'closed' && !locked){ lock('This chat has ended.'); }
       }).catch(function(){});
-  }
-
-  function subscribeTyping(){
-    if(realtimeCh || !sessionId) return;
-    // Lightweight realtime via fetch-based broadcast not used; rely on polling for messages.
-    // Typing indicator from human via a separate poll on broadcasts is out of scope for the no-SDK widget,
-    // so we display a typing bubble only while AI is processing (handled at send time).
   }
 
   function openWidget(){
