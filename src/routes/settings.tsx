@@ -30,10 +30,6 @@ function SettingsView() {
       await update.mutateAsync({
         company_name: form.company_name, company_email: form.company_email, company_website: form.company_website,
         vat_enabled: form.vat_enabled, invoice_prefix: form.invoice_prefix, services: form.services,
-        chatbot_system_prompt: form.chatbot_system_prompt, notify_new_chat: form.notify_new_chat,
-        idle_close_hours: Number(form.idle_close_hours) || 24,
-        greeting_delay_seconds: Number(form.greeting_delay_seconds) || 60,
-        notification_sound: form.notification_sound,
         office_hours_start: form.office_hours_start,
         office_hours_end: form.office_hours_end,
         office_days: form.office_days,
@@ -42,6 +38,7 @@ function SettingsView() {
       toast.success("Settings saved");
     } catch (e: any) { toast.error(e.message); }
   };
+
 
   const copy = async () => {
     await navigator.clipboard.writeText(signupLink);

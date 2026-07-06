@@ -12,15 +12,11 @@ export interface Settings {
   invoice_prefix: string;
   next_invoice_number: number;
   services: { name: string; price: number }[];
-  chatbot_system_prompt: string;
-  notify_new_chat: boolean;
-  idle_close_hours: number;
-  greeting_delay_seconds: number;
-  notification_sound: boolean;
   office_hours_start: string;
   office_hours_end: string;
   office_days: number[];
   office_timezone: string;
+
 }
 
 export function useSettings() {
