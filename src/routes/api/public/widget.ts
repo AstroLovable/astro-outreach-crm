@@ -131,21 +131,11 @@ const JS = `(function(){
             if(m.created_at > lastSeenAt) lastSeenAt = m.created_at;
             if(seenIds[m.id]) return;
             seenIds[m.id] = 1;
-            if(m.role === 'human' || m.role === 'assistant'){
-              hideTyping();
-              add(m.role, m.content);
-            }
+            if(m.role === 'human'){ add('bot', m.content); }
           });
         }
         if(r && r.status === 'closed' && !locked){ lock('This chat has ended.'); }
       }).catch(function(){});
-  }
-
-  function subscribeTyping(){
-    if(realtimeCh || !sessionId) return;
-    // Lightweight realtime via fetch-based broadcast not used; rely on polling for messages.
-    // Typing indicator from human via a separate poll on broadcasts is out of scope for the no-SDK widget,
-    // so we display a typing bubble only while AI is processing (handled at send time).
   }
 
   function openWidget(){
@@ -185,12 +175,9 @@ const JS = `(function(){
     if(!v) return;
     add('user', v);
     inp.value='';
-    showTyping();
     callFn('chat', { sessionId: sessionId, visitorSecret: visitorSecret, pageUrl: location.href, message: v })
       .then(function(r){
-        hideTyping();
         if(r && r.error === 'Forbidden'){
-          // stale/invalid secret — drop and let next send create a fresh session
           clearSession();
           add('bot', '⚠ Session expired. Please send your message again.');
           return;
@@ -201,12 +188,8 @@ const JS = `(function(){
           if(r.visitorSecret) visitorSecret = r.visitorSecret;
           saveSession();
           if(!pollTimer) pollTimer = setInterval(poll, 3000);
-          subscribeTyping();
         }
-        if(r.replyId) seenIds[r.replyId] = 1;
-        if(r.reply) add('bot', r.reply);
-        if(r.showContact) showContactForm("Let's get your details — we'll reply with a quote.");
-        else if(r.error) add('bot', '⚠ '+r.error);
+        if(r.error) add('bot', '⚠ '+r.error);
       })
       .catch(function(){ hideTyping(); add('bot', '⚠ Network error'); });
   };
