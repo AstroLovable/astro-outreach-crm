@@ -14,12 +14,9 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ProposalsRouteImport } from './routes/proposals'
 import { Route as PipelineRouteImport } from './routes/pipeline'
 import { Route as ClientsRouteImport } from './routes/clients'
-import { Route as ChatsRouteImport } from './routes/chats'
 import { Route as BillingRouteImport } from './routes/billing'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiPublicWidgetRouteImport } from './routes/api/public/widget'
-import { Route as ApiPublicChatRouteImport } from './routes/api/public/chat'
 
 const TasksRoute = TasksRouteImport.update({
   id: '/tasks',
@@ -46,11 +43,6 @@ const ClientsRoute = ClientsRouteImport.update({
   path: '/clients',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ChatsRoute = ChatsRouteImport.update({
-  id: '/chats',
-  path: '/chats',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const BillingRoute = BillingRouteImport.update({
   id: '/billing',
   path: '/billing',
@@ -66,56 +58,37 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicWidgetRoute = ApiPublicWidgetRouteImport.update({
-  id: '/api/public/widget',
-  path: '/api/public/widget',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicChatRoute = ApiPublicChatRouteImport.update({
-  id: '/api/public/chat',
-  path: '/api/public/chat',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/billing': typeof BillingRoute
-  '/chats': typeof ChatsRoute
   '/clients': typeof ClientsRoute
   '/pipeline': typeof PipelineRoute
   '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
-  '/api/public/chat': typeof ApiPublicChatRoute
-  '/api/public/widget': typeof ApiPublicWidgetRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/billing': typeof BillingRoute
-  '/chats': typeof ChatsRoute
   '/clients': typeof ClientsRoute
   '/pipeline': typeof PipelineRoute
   '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
-  '/api/public/chat': typeof ApiPublicChatRoute
-  '/api/public/widget': typeof ApiPublicWidgetRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/billing': typeof BillingRoute
-  '/chats': typeof ChatsRoute
   '/clients': typeof ClientsRoute
   '/pipeline': typeof PipelineRoute
   '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
-  '/api/public/chat': typeof ApiPublicChatRoute
-  '/api/public/widget': typeof ApiPublicWidgetRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -123,54 +96,42 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/billing'
-    | '/chats'
     | '/clients'
     | '/pipeline'
     | '/proposals'
     | '/settings'
     | '/tasks'
-    | '/api/public/chat'
-    | '/api/public/widget'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/billing'
-    | '/chats'
     | '/clients'
     | '/pipeline'
     | '/proposals'
     | '/settings'
     | '/tasks'
-    | '/api/public/chat'
-    | '/api/public/widget'
   id:
     | '__root__'
     | '/'
     | '/auth'
     | '/billing'
-    | '/chats'
     | '/clients'
     | '/pipeline'
     | '/proposals'
     | '/settings'
     | '/tasks'
-    | '/api/public/chat'
-    | '/api/public/widget'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   BillingRoute: typeof BillingRoute
-  ChatsRoute: typeof ChatsRoute
   ClientsRoute: typeof ClientsRoute
   PipelineRoute: typeof PipelineRoute
   ProposalsRoute: typeof ProposalsRoute
   SettingsRoute: typeof SettingsRoute
   TasksRoute: typeof TasksRoute
-  ApiPublicChatRoute: typeof ApiPublicChatRoute
-  ApiPublicWidgetRoute: typeof ApiPublicWidgetRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -210,13 +171,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClientsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/chats': {
-      id: '/chats'
-      path: '/chats'
-      fullPath: '/chats'
-      preLoaderRoute: typeof ChatsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/billing': {
       id: '/billing'
       path: '/billing'
@@ -238,20 +192,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/widget': {
-      id: '/api/public/widget'
-      path: '/api/public/widget'
-      fullPath: '/api/public/widget'
-      preLoaderRoute: typeof ApiPublicWidgetRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/chat': {
-      id: '/api/public/chat'
-      path: '/api/public/chat'
-      fullPath: '/api/public/chat'
-      preLoaderRoute: typeof ApiPublicChatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -259,14 +199,11 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   BillingRoute: BillingRoute,
-  ChatsRoute: ChatsRoute,
   ClientsRoute: ClientsRoute,
   PipelineRoute: PipelineRoute,
   ProposalsRoute: ProposalsRoute,
   SettingsRoute: SettingsRoute,
   TasksRoute: TasksRoute,
-  ApiPublicChatRoute: ApiPublicChatRoute,
-  ApiPublicWidgetRoute: ApiPublicWidgetRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
