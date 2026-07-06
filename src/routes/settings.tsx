@@ -4,7 +4,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -113,7 +113,7 @@ function SettingsView() {
 export const Route = createFileRoute("/settings")({
   component: () => (
     <AppShell>
-      <PageHeader title="Settings" subtitle="Company, chatbot, office hours and notifications" />
+      <PageHeader title="Settings" subtitle="Company, services, office hours" />
       <SettingsView />
     </AppShell>
   ),
