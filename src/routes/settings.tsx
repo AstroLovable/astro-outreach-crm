@@ -4,7 +4,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -30,10 +30,6 @@ function SettingsView() {
       await update.mutateAsync({
         company_name: form.company_name, company_email: form.company_email, company_website: form.company_website,
         vat_enabled: form.vat_enabled, invoice_prefix: form.invoice_prefix, services: form.services,
-        chatbot_system_prompt: form.chatbot_system_prompt, notify_new_chat: form.notify_new_chat,
-        idle_close_hours: Number(form.idle_close_hours) || 24,
-        greeting_delay_seconds: Number(form.greeting_delay_seconds) || 60,
-        notification_sound: form.notification_sound,
         office_hours_start: form.office_hours_start,
         office_hours_end: form.office_hours_end,
         office_days: form.office_days,
@@ -42,6 +38,7 @@ function SettingsView() {
       toast.success("Settings saved");
     } catch (e: any) { toast.error(e.message); }
   };
+
 
   const copy = async () => {
     await navigator.clipboard.writeText(signupLink);
@@ -86,25 +83,6 @@ function SettingsView() {
         <Button variant="outline" size="sm" onClick={() => setForm({ ...form, services: [...form.services, { name: "New", price: 0 }] })}>Add service</Button>
       </Card>
 
-      <Card className="card-surface p-6 space-y-4">
-        <h2 className="font-semibold">Chatbot</h2>
-        <div><Label>System prompt</Label><Textarea rows={4} value={form.chatbot_system_prompt} onChange={(e) => setForm({ ...form, chatbot_system_prompt: e.target.value })} /></div>
-        <div className="grid sm:grid-cols-3 gap-4">
-          <div>
-            <Label>Pre-chat greeting delay (seconds)</Label>
-            <Input type="number" value={form.greeting_delay_seconds} onChange={(e) => setForm({ ...form, greeting_delay_seconds: e.target.value })} />
-          </div>
-          <div>
-            <Label>Auto-close idle chats after (hours)</Label>
-            <Input type="number" value={form.idle_close_hours} onChange={(e) => setForm({ ...form, idle_close_hours: e.target.value })} />
-          </div>
-          <div className="flex items-end gap-3">
-            <Switch checked={form.notification_sound} onCheckedChange={(v) => setForm({ ...form, notification_sound: v })} />
-            <Label>Play sound on new chat</Label>
-          </div>
-        </div>
-        <div className="flex items-center gap-3"><Switch checked={form.notify_new_chat} onCheckedChange={(v) => setForm({ ...form, notify_new_chat: v })} /><Label>Email me on new human-handoff requests</Label></div>
-      </Card>
 
       <Card className="card-surface p-6 space-y-4">
         <h2 className="font-semibold">Office hours</h2>
@@ -127,46 +105,15 @@ function SettingsView() {
       </Card>
 
       <div className="flex justify-end"><Button onClick={save} disabled={update.isPending}>Save changes</Button></div>
-
-      <EmbedSnippet businessName={form.company_name} greetingDelay={form.greeting_delay_seconds} />
     </div>
   );
 }
 
-function EmbedSnippet({ businessName, greetingDelay }: { businessName: string; greetingDelay: number }) {
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://your-crm.lovable.app";
-  const snippet = `<!-- AstroLabs & Co. CRM chat widget -->
-<script
-  src="${origin}/api/public/widget"
-  data-base="${origin}"
-  data-business="${(businessName || "").replace(/"/g, "&quot;")}"
-  data-title="Chat with us"
-  data-color="#4A6FA5"
-  data-greeting-delay="${greetingDelay}"
-  defer
-></script>`;
-  const copy = async () => {
-    await navigator.clipboard.writeText(snippet);
-    toast.success("Embed code copied");
-  };
-  return (
-    <Card className="card-surface p-6 space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-semibold">Website chat embed</h2>
-          <p className="text-sm text-muted-foreground">Paste before <code>&lt;/body&gt;</code> on any site.</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={copy}><Copy className="h-4 w-4 mr-1" />Copy</Button>
-      </div>
-      <Textarea readOnly rows={10} value={snippet} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
-    </Card>
-  );
-}
 
 export const Route = createFileRoute("/settings")({
   component: () => (
     <AppShell>
-      <PageHeader title="Settings" subtitle="Company, chatbot, office hours and notifications" />
+      <PageHeader title="Settings" subtitle="Company, services, office hours" />
       <SettingsView />
     </AppShell>
   ),

@@ -1,7 +1,1 @@
 project_id = "rjvlscwkwzjuksnwwujo"
-
-[functions.chat]
-verify_jwt = false
-
-[functions.handoff]
-verify_jwt = false

@@ -2,7 +2,7 @@ import { Link, useRouterState, Outlet, useNavigate } from "@tanstack/react-route
 import { useEffect, useState, type ReactNode } from "react";
 import {
   LayoutDashboard, Users, KanbanSquare, FileText, Receipt, CheckSquare,
-  MessageSquare, Settings as SettingsIcon, LogOut, Menu, X,
+  Settings as SettingsIcon, LogOut, Menu, X,
 } from "lucide-react";
 import { SaturnLogo } from "@/components/SaturnLogo";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,7 +15,6 @@ const items = [
   { to: "/proposals", label: "Proposals", icon: FileText, key: "proposals" as const },
   { to: "/billing", label: "Quotes & Invoices", icon: Receipt, key: "billing" as const },
   { to: "/tasks", label: "Tasks", icon: CheckSquare, key: "tasks" as const },
-  { to: "/chats", label: "Live Chats", icon: MessageSquare, key: "chats" as const },
   { to: "/settings", label: "Settings", icon: SettingsIcon, key: "settings" as const },
 ];
 
@@ -29,14 +28,14 @@ function Badge({ count }: { count: number }) {
 }
 
 function NavList({
-  pathname, onNavigate, chatBadge, clientBadge,
-}: { pathname: string; onNavigate?: () => void; chatBadge: number; clientBadge: number }) {
+  pathname, onNavigate, clientBadge,
+}: { pathname: string; onNavigate?: () => void; clientBadge: number }) {
   return (
     <nav className="px-3 flex-1 space-y-0.5 overflow-y-auto">
       {items.map((it) => {
         const active = it.to === "/" ? pathname === "/" : pathname.startsWith(it.to);
         const Icon = it.icon;
-        const badge = it.key === "chats" ? chatBadge : it.key === "clients" ? clientBadge : 0;
+        const badge = it.key === "clients" ? clientBadge : 0;
         return (
           <Link
             key={it.to}
@@ -62,41 +61,11 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [chatBadge, setChatBadge] = useState(0);
   const [clientBadge, setClientBadge] = useState(0);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
   }, [user, loading, navigate]);
-
-  // Unread chat badge: sum of unread_count across non-closed sessions
-  useEffect(() => {
-    if (!user) return;
-    const refresh = async () => {
-      const { data } = await supabase
-        .from("chat_sessions")
-        .select("unread_count, status")
-        .neq("status", "closed");
-      const total = (data || []).reduce(
-        (s: number, r: { unread_count: number | null }) => s + (r.unread_count || 0), 0,
-      );
-      setChatBadge(total);
-    };
-    refresh();
-    const ch = supabase
-      .channel("appshell_chat_unread")
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_sessions" }, refresh)
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [user]);
-
-  // Clear chat badge when viewing /chats
-  useEffect(() => {
-    if (pathname.startsWith("/chats") && user) {
-      supabase.from("chat_sessions").update({ unread_count: 0 })
-        .neq("unread_count", 0).then(() => setChatBadge(0));
-    }
-  }, [pathname, user]);
 
   // Client follow-up badge: clients with follow_up_date <= today and not done
   useEffect(() => {
@@ -160,7 +129,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
     <div className="min-h-screen flex w-full">
       <aside className="hidden md:flex w-60 shrink-0 bg-sidebar border-r border-sidebar-border flex-col">
         <div className="p-5">{Brand}</div>
-        <NavList pathname={pathname} chatBadge={chatBadge} clientBadge={clientBadge} />
+        <NavList pathname={pathname} clientBadge={clientBadge} />
         <div className="p-3 border-t border-sidebar-border">
           <div className="text-[11px] text-muted-foreground px-2 truncate">{user.email}</div>
           <button
@@ -180,7 +149,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
           className="p-2 -mr-2 rounded-md text-sidebar-foreground hover:bg-sidebar-accent relative"
         >
           <Menu className="h-5 w-5" />
-          {(chatBadge + clientBadge) > 0 && (
+          {clientBadge > 0 && (
             <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive" />
           )}
         </button>
@@ -200,7 +169,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
               <X className="h-5 w-5" />
             </button>
           </div>
-          <NavList pathname={pathname} chatBadge={chatBadge} clientBadge={clientBadge}
+          <NavList pathname={pathname} clientBadge={clientBadge}
             onNavigate={() => setMobileOpen(false)} />
           <div className="p-3 border-t border-sidebar-border">
             <div className="text-[11px] text-muted-foreground px-2 truncate">{user.email}</div>

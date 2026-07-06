@@ -41,83 +41,6 @@ export type Database = {
         }
         Relationships: []
       }
-      chat_messages: {
-        Row: {
-          content: string
-          created_at: string
-          id: string
-          role: string
-          session_id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          id?: string
-          role: string
-          session_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          id?: string
-          role?: string
-          session_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "chat_messages_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "chat_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      chat_sessions: {
-        Row: {
-          business: string | null
-          created_at: string
-          id: string
-          owner_id: string | null
-          page_url: string | null
-          status: string
-          system_prompt: string | null
-          unread_count: number
-          updated_at: string
-          visitor_email: string | null
-          visitor_name: string | null
-          visitor_secret: string | null
-        }
-        Insert: {
-          business?: string | null
-          created_at?: string
-          id?: string
-          owner_id?: string | null
-          page_url?: string | null
-          status?: string
-          system_prompt?: string | null
-          unread_count?: number
-          updated_at?: string
-          visitor_email?: string | null
-          visitor_name?: string | null
-          visitor_secret?: string | null
-        }
-        Update: {
-          business?: string | null
-          created_at?: string
-          id?: string
-          owner_id?: string | null
-          page_url?: string | null
-          status?: string
-          system_prompt?: string | null
-          unread_count?: number
-          updated_at?: string
-          visitor_email?: string | null
-          visitor_name?: string | null
-          visitor_secret?: string | null
-        }
-        Relationships: []
-      }
       clients: {
         Row: {
           business: string | null
@@ -408,18 +331,13 @@ export type Database = {
       }
       settings: {
         Row: {
-          chatbot_system_prompt: string
           company_email: string
           company_name: string
           company_website: string | null
           created_at: string
-          greeting_delay_seconds: number
           id: string
-          idle_close_hours: number
           invoice_prefix: string
           next_invoice_number: number
-          notification_sound: boolean
-          notify_new_chat: boolean
           office_days: number[]
           office_hours_end: string
           office_hours_start: string
@@ -430,18 +348,13 @@ export type Database = {
           vat_enabled: boolean
         }
         Insert: {
-          chatbot_system_prompt?: string
           company_email?: string
           company_name?: string
           company_website?: string | null
           created_at?: string
-          greeting_delay_seconds?: number
           id?: string
-          idle_close_hours?: number
           invoice_prefix?: string
           next_invoice_number?: number
-          notification_sound?: boolean
-          notify_new_chat?: boolean
           office_days?: number[]
           office_hours_end?: string
           office_hours_start?: string
@@ -452,18 +365,13 @@ export type Database = {
           vat_enabled?: boolean
         }
         Update: {
-          chatbot_system_prompt?: string
           company_email?: string
           company_name?: string
           company_website?: string | null
           created_at?: string
-          greeting_delay_seconds?: number
           id?: string
-          idle_close_hours?: number
           invoice_prefix?: string
           next_invoice_number?: number
-          notification_sound?: boolean
-          notify_new_chat?: boolean
           office_days?: number[]
           office_hours_end?: string
           office_hours_start?: string

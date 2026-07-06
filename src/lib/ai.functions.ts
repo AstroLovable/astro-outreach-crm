@@ -137,27 +137,3 @@ export const summarizeNotes = createServerFn({ method: "POST" })
     return { summary: content.trim() };
   });
 
-export const draftReply = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
-    z
-      .object({
-        context: z.string().min(1).max(20000),
-        instructions: z.string().max(2000).optional(),
-      })
-      .parse(d),
-  )
-  .handler(async ({ data }) => {
-    const content = await groq({
-      system:
-        "You draft concise, professional email replies in AstroLabs & Co.'s warm UK studio tone. No filler. Sign off as the AstroLabs team.",
-      messages: [
-        {
-          role: "user",
-          content: `Context:\n${data.context}\n\nInstructions: ${data.instructions || "Draft a clear, helpful reply."}`,
-        },
-      ],
-      max_tokens: 250,
-    });
-    return { reply: content.trim() };
-  });
