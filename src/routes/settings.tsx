@@ -10,13 +10,14 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Copy, Trash2 } from "lucide-react";
-import { supabase } from "@/lib/supabase-client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { requestDeletionCode, verifyAndClearDatabase } from "@/lib/deletion.functions";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+
 
 const WEEKDAYS = [
   { d: 1, l: "Mon" }, { d: 2, l: "Tue" }, { d: 3, l: "Wed" },
@@ -28,28 +29,52 @@ function SettingsView() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
-  const [clearing, setClearing] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+
+  const requestCode = useServerFn(requestDeletionCode);
+  const verifyClear = useServerFn(verifyAndClearDatabase);
 
   useEffect(() => { if (data && !form) setForm(data); }, [data, form]);
   if (isLoading || !form) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
-  const clearDatabase = async () => {
-    if (!user) return;
-    setClearing(true);
+  const startFlow = () => setConfirmOpen(true);
+
+  const sendCode = async () => {
+    setSending(true);
     try {
-      const tables = ["activity", "notes", "tasks", "invoices", "quotes", "proposals", "clients"] as const;
-      for (const t of tables) {
-        const { error } = await supabase.from(t).delete().eq("owner_id", user.id);
-        if (error) throw error;
-      }
-      await qc.invalidateQueries();
-      toast.success("All client data cleared");
+      const res: any = await requestCode();
+      setSentTo(res?.sentTo ?? null);
+      setConfirmOpen(false);
+      setCodeInput("");
+      setCodeOpen(true);
+      toast.success(`Verification code sent${res?.sentTo ? ` to ${res.sentTo}` : ""}`);
     } catch (e: any) {
-      toast.error(e.message);
+      toast.error(e.message ?? "Failed to send code");
     } finally {
-      setClearing(false);
+      setSending(false);
     }
   };
+
+  const verifyAndDelete = async () => {
+    setVerifying(true);
+    try {
+      await verifyClear({ data: { code: codeInput.trim() } });
+      await qc.invalidateQueries();
+      toast.success("All client data cleared");
+      setCodeOpen(false);
+      setCodeInput("");
+    } catch (e: any) {
+      toast.error(e.message ?? "Verification failed");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
 
   const signupLink = typeof window !== "undefined" ? `${window.location.origin}/auth?signup=1` : "/auth?signup=1";
 
@@ -137,28 +162,66 @@ function SettingsView() {
         <p className="text-sm text-muted-foreground">
           Permanently delete all clients, invoices, quotes, proposals, tasks, notes, and activity. Your account and settings are kept. This cannot be undone.
         </p>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive" disabled={clearing}>
-              <Trash2 className="h-4 w-4 mr-1" />{clearing ? "Clearing…" : "Clear database"}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Clear all client data?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This permanently deletes every client, invoice, quote, proposal, task, note, and activity entry on your account. This cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={clearDatabase} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Yes, delete everything
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button variant="destructive" onClick={startFlow}>
+          <Trash2 className="h-4 w-4 mr-1" />Delete data
+        </Button>
       </Card>
+
+      {/* Step 1: confirm intent */}
+      <Dialog open={confirmOpen} onOpenChange={(o) => !sending && setConfirmOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Are you sure you want to do this?</DialogTitle>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={sending}>Cancel</Button>
+            <Button variant="destructive" onClick={sendCode} disabled={sending}>
+              {sending ? "Sending code…" : "Continue"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Step 2: enter 6-digit code */}
+      <Dialog open={codeOpen} onOpenChange={(o) => !verifying && setCodeOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enter verification code</DialogTitle>
+            <DialogDescription>
+              We sent a 6-digit code{sentTo ? ` to ${sentTo}` : ""}. It expires in 10 minutes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              inputMode="numeric" maxLength={6} placeholder="123456"
+              value={codeInput}
+              onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              className="text-center text-lg tracking-[0.5em] font-mono"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={sendCode}
+              disabled={sending || verifying}
+              className="text-xs text-accent hover:underline disabled:opacity-50"
+            >
+              {sending ? "Sending…" : "Resend code"}
+            </button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCodeOpen(false)} disabled={verifying}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={verifyAndDelete}
+              disabled={verifying || codeInput.length !== 6}
+            >
+              {verifying ? "Verifying…" : "Verify and delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       <div className="flex justify-end"><Button onClick={save} disabled={update.isPending}>Save changes</Button></div>
     </div>
