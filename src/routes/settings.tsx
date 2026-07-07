@@ -79,7 +79,7 @@ function SettingsView() {
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <Card className="card-surface p-6 space-y-4">
         <h2 className="font-semibold">Company</h2>
         <div className="grid sm:grid-cols-2 gap-4">
