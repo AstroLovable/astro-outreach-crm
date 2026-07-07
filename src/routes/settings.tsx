@@ -162,28 +162,66 @@ function SettingsView() {
         <p className="text-sm text-muted-foreground">
           Permanently delete all clients, invoices, quotes, proposals, tasks, notes, and activity. Your account and settings are kept. This cannot be undone.
         </p>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive" disabled={clearing}>
-              <Trash2 className="h-4 w-4 mr-1" />{clearing ? "Clearing…" : "Clear database"}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Clear all client data?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This permanently deletes every client, invoice, quote, proposal, task, note, and activity entry on your account. This cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={clearDatabase} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Yes, delete everything
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button variant="destructive" onClick={startFlow}>
+          <Trash2 className="h-4 w-4 mr-1" />Delete data
+        </Button>
       </Card>
+
+      {/* Step 1: confirm intent */}
+      <Dialog open={confirmOpen} onOpenChange={(o) => !sending && setConfirmOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Are you sure you want to do this?</DialogTitle>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={sending}>Cancel</Button>
+            <Button variant="destructive" onClick={sendCode} disabled={sending}>
+              {sending ? "Sending code…" : "Continue"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Step 2: enter 6-digit code */}
+      <Dialog open={codeOpen} onOpenChange={(o) => !verifying && setCodeOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enter verification code</DialogTitle>
+            <DialogDescription>
+              We sent a 6-digit code{sentTo ? ` to ${sentTo}` : ""}. It expires in 10 minutes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              inputMode="numeric" maxLength={6} placeholder="123456"
+              value={codeInput}
+              onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              className="text-center text-lg tracking-[0.5em] font-mono"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={sendCode}
+              disabled={sending || verifying}
+              className="text-xs text-accent hover:underline disabled:opacity-50"
+            >
+              {sending ? "Sending…" : "Resend code"}
+            </button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCodeOpen(false)} disabled={verifying}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={verifyAndDelete}
+              disabled={verifying || codeInput.length !== 6}
+            >
+              {verifying ? "Verifying…" : "Verify and delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       <div className="flex justify-end"><Button onClick={save} disabled={update.isPending}>Save changes</Button></div>
     </div>
