@@ -29,28 +29,52 @@ function SettingsView() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
-  const [clearing, setClearing] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+
+  const requestCode = useServerFn(requestDeletionCode);
+  const verifyClear = useServerFn(verifyAndClearDatabase);
 
   useEffect(() => { if (data && !form) setForm(data); }, [data, form]);
   if (isLoading || !form) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
-  const clearDatabase = async () => {
-    if (!user) return;
-    setClearing(true);
+  const startFlow = () => setConfirmOpen(true);
+
+  const sendCode = async () => {
+    setSending(true);
     try {
-      const tables = ["activity", "notes", "tasks", "invoices", "quotes", "proposals", "clients"] as const;
-      for (const t of tables) {
-        const { error } = await supabase.from(t).delete().eq("owner_id", user.id);
-        if (error) throw error;
-      }
-      await qc.invalidateQueries();
-      toast.success("All client data cleared");
+      const res: any = await requestCode();
+      setSentTo(res?.sentTo ?? null);
+      setConfirmOpen(false);
+      setCodeInput("");
+      setCodeOpen(true);
+      toast.success(`Verification code sent${res?.sentTo ? ` to ${res.sentTo}` : ""}`);
     } catch (e: any) {
-      toast.error(e.message);
+      toast.error(e.message ?? "Failed to send code");
     } finally {
-      setClearing(false);
+      setSending(false);
     }
   };
+
+  const verifyAndDelete = async () => {
+    setVerifying(true);
+    try {
+      await verifyClear({ data: { code: codeInput.trim() } });
+      await qc.invalidateQueries();
+      toast.success("All client data cleared");
+      setCodeOpen(false);
+      setCodeInput("");
+    } catch (e: any) {
+      toast.error(e.message ?? "Verification failed");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
 
   const signupLink = typeof window !== "undefined" ? `${window.location.origin}/auth?signup=1` : "/auth?signup=1";
 
