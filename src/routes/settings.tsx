@@ -132,6 +132,34 @@ function SettingsView() {
         </div>
       </Card>
 
+      <Card className="card-surface p-6 space-y-3 border-destructive/40">
+        <h2 className="font-semibold text-destructive">Danger zone</h2>
+        <p className="text-sm text-muted-foreground">
+          Permanently delete all clients, invoices, quotes, proposals, tasks, notes, and activity. Your account and settings are kept. This cannot be undone.
+        </p>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" disabled={clearing}>
+              <Trash2 className="h-4 w-4 mr-1" />{clearing ? "Clearing…" : "Clear database"}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear all client data?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently deletes every client, invoice, quote, proposal, task, note, and activity entry on your account. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={clearDatabase} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Yes, delete everything
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Card>
+
       <div className="flex justify-end"><Button onClick={save} disabled={update.isPending}>Save changes</Button></div>
     </div>
   );
