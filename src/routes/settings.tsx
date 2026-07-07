@@ -25,10 +25,31 @@ const WEEKDAYS = [
 
 function SettingsView() {
   const { data, update, isLoading } = useSettings();
+  const { user } = useAuth();
+  const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => { if (data && !form) setForm(data); }, [data, form]);
   if (isLoading || !form) return <p className="text-sm text-muted-foreground">Loading…</p>;
+
+  const clearDatabase = async () => {
+    if (!user) return;
+    setClearing(true);
+    try {
+      const tables = ["activity", "notes", "tasks", "invoices", "quotes", "proposals", "clients"] as const;
+      for (const t of tables) {
+        const { error } = await supabase.from(t).delete().eq("owner_id", user.id);
+        if (error) throw error;
+      }
+      await qc.invalidateQueries();
+      toast.success("All client data cleared");
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const signupLink = typeof window !== "undefined" ? `${window.location.origin}/auth?signup=1` : "/auth?signup=1";
 
