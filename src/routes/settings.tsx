@@ -9,7 +9,14 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Copy } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
+import { supabase } from "@/lib/supabase-client";
+import { useAuth } from "@/hooks/useAuth";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const WEEKDAYS = [
   { d: 1, l: "Mon" }, { d: 2, l: "Tue" }, { d: 3, l: "Wed" },
@@ -18,10 +25,31 @@ const WEEKDAYS = [
 
 function SettingsView() {
   const { data, update, isLoading } = useSettings();
+  const { user } = useAuth();
+  const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => { if (data && !form) setForm(data); }, [data, form]);
   if (isLoading || !form) return <p className="text-sm text-muted-foreground">Loading…</p>;
+
+  const clearDatabase = async () => {
+    if (!user) return;
+    setClearing(true);
+    try {
+      const tables = ["activity", "notes", "tasks", "invoices", "quotes", "proposals", "clients"] as const;
+      for (const t of tables) {
+        const { error } = await supabase.from(t).delete().eq("owner_id", user.id);
+        if (error) throw error;
+      }
+      await qc.invalidateQueries();
+      toast.success("All client data cleared");
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const signupLink = typeof window !== "undefined" ? `${window.location.origin}/auth?signup=1` : "/auth?signup=1";
 
@@ -102,6 +130,34 @@ function SettingsView() {
             ))}
           </div>
         </div>
+      </Card>
+
+      <Card className="card-surface p-6 space-y-3 border-destructive/40">
+        <h2 className="font-semibold text-destructive">Danger zone</h2>
+        <p className="text-sm text-muted-foreground">
+          Permanently delete all clients, invoices, quotes, proposals, tasks, notes, and activity. Your account and settings are kept. This cannot be undone.
+        </p>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" disabled={clearing}>
+              <Trash2 className="h-4 w-4 mr-1" />{clearing ? "Clearing…" : "Clear database"}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear all client data?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently deletes every client, invoice, quote, proposal, task, note, and activity entry on your account. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={clearDatabase} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Yes, delete everything
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </Card>
 
       <div className="flex justify-end"><Button onClick={save} disabled={update.isPending}>Save changes</Button></div>
